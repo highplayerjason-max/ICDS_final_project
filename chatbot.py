@@ -1,7 +1,6 @@
 import os
 import random
 import subprocess
-import tempfile
 import urllib.error
 import urllib.request
 import json
@@ -101,22 +100,30 @@ class OpenAICompatibleBot(SimpleContextBot):
 
     def _format_error(self, exc):
         if isinstance(exc, subprocess.CalledProcessError):
-            stderr = (exc.stderr or "").strip()
+            stderr = self._decode_process_output(exc.stderr).strip()
             if stderr:
                 return f"curl exited with code {exc.returncode}: {stderr}"
             return f"curl exited with code {exc.returncode}"
         return f"{type(exc).__name__}: {exc}"
 
+    def _decode_process_output(self, value):
+        if isinstance(value, bytes):
+            return value.decode("utf-8", errors="replace")
+        return value or ""
+
     def _api_reply(self):
         messages = [
             {
                 "role": "system",
-                "content": f"You are a {self.personality}. Keep replies concise for a chat app demo.",
+                "content": (
+                    f"You are a {self.personality}. Keep replies concise for a chat app demo. "
+                    "Reply in English unless the user asks for Chinese. Use plain ASCII punctuation."
+                ),
             }
         ]
         for role, content in self.history[-10:]:
             messages.append({"role": role, "content": content})
-        body = json.dumps({"model": self.model, "messages": messages}, ensure_ascii=False)
+        body = json.dumps({"model": self.model, "messages": messages}, ensure_ascii=True)
         try:
             data = self._urllib_chat_completion(body.encode("utf-8"))
         except urllib.error.URLError as exc:
@@ -139,40 +146,29 @@ class OpenAICompatibleBot(SimpleContextBot):
             return json.loads(response.read().decode("utf-8"))
 
     def _curl_chat_completion(self, body):
-        temp_path = None
-        try:
-            with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as temp_file:
-                temp_file.write(body)
-                temp_path = temp_file.name
-            result = subprocess.run(
-                [
-                    "curl.exe",
-                    "--silent",
-                    "--show-error",
-                    "--fail",
-                    "--request",
-                    "POST",
-                    "--url",
-                    f'{self.base_url.rstrip("/")}/chat/completions',
-                    "--header",
-                    f"Authorization: Bearer {self.api_key}",
-                    "--header",
-                    "Content-Type: application/json",
-                    "--data-binary",
-                    "@" + temp_path,
-                ],
-                capture_output=True,
-                text=True,
-                timeout=60,
-                check=True,
-            )
-            return json.loads(result.stdout)
-        finally:
-            if temp_path:
-                try:
-                    os.remove(temp_path)
-                except OSError:
-                    pass
+        result = subprocess.run(
+            [
+                "curl.exe",
+                "--silent",
+                "--show-error",
+                "--fail",
+                "--request",
+                "POST",
+                "--url",
+                f'{self.base_url.rstrip("/")}/chat/completions',
+                "--header",
+                f"Authorization: Bearer {self.api_key}",
+                "--header",
+                "Content-Type: application/json; charset=utf-8",
+                "--data-binary",
+                "@-",
+            ],
+            input=body.encode("utf-8"),
+            capture_output=True,
+            timeout=60,
+            check=True,
+        )
+        return json.loads(result.stdout.decode("utf-8"))
 
 
 def analyze_sentiment(text):
