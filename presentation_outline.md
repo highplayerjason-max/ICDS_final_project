@@ -29,6 +29,7 @@ Target length: 10-15 minutes.
 - Ask the chatbot a question and show context-aware response.
 - Send `@bot explain this project` in the normal chat input to show chatbot
   group interaction.
+- Click `Disconnect` or type `/quit` to show a clean client exit.
 - Show one meaningful pi-mono usage, such as:
   - generating the first Tkinter GUI structure,
   - debugging the receive thread,

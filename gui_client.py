@@ -49,8 +49,11 @@ class ChatGUI:
         self.connect_button = tk.Button(frame, text="Connect", command=self.connect)
         self.connect_button.grid(row=0, column=6, padx=4)
 
+        self.disconnect_button = tk.Button(frame, text="Disconnect", command=self.disconnect, state=tk.DISABLED)
+        self.disconnect_button.grid(row=0, column=7, padx=4)
+
         self.status_label = tk.Label(frame, text="Disconnected", fg="red")
-        self.status_label.grid(row=0, column=7, padx=8)
+        self.status_label.grid(row=0, column=8, padx=8)
 
     def build_chat(self):
         main = tk.Frame(self.root, padx=10, pady=6)
@@ -100,6 +103,7 @@ class ChatGUI:
         self.connected = True
         self.status_label.config(text="Connected", fg="green")
         self.connect_button.config(state=tk.DISABLED)
+        self.disconnect_button.config(state=tk.NORMAL)
         threading.Thread(target=self.receive_loop, daemon=True).start()
 
     def receive_loop(self):
@@ -115,8 +119,15 @@ class ChatGUI:
                     self.incoming.put(message)
             except (OSError, ValueError):
                 break
-        self.connected = False
-        self.incoming.put({"type": "system", "sender": "Client", "content": "Disconnected from server."})
+        if self.connected:
+            self.connected = False
+            self.socket = None
+            self.incoming.put({
+                "type": "system",
+                "sender": "Client",
+                "content": "Disconnected from server.",
+            })
+            self.incoming.put({"type": "ui_state", "sender": "Client", "content": "disconnected"})
 
     def process_incoming(self):
         while True:
@@ -128,6 +139,10 @@ class ChatGUI:
             content = message.get("content", "")
             if message.get("type") == "system":
                 self.display_message(sender, content, "system")
+            elif message.get("type") == "ui_state":
+                self.status_label.config(text="Disconnected", fg="red")
+                self.connect_button.config(state=tk.NORMAL)
+                self.disconnect_button.config(state=tk.DISABLED)
             elif sender == self.username:
                 self.display_message("Me", content, "me")
             else:
@@ -145,6 +160,9 @@ class ChatGUI:
         if not text:
             return
         self.message_entry.delete(0, tk.END)
+        if text.lower() in {"/quit", "/exit", "/disconnect"}:
+            self.disconnect()
+            return
         if text.startswith("/"):
             self.send_command(text)
             return
@@ -175,6 +193,26 @@ class ChatGUI:
             return True
         messagebox.showwarning("Not connected", "Start server.py first, then connect.")
         return False
+
+    def disconnect(self):
+        if not self.connected and not self.socket:
+            return
+        self.connected = False
+        try:
+            if self.socket:
+                self.socket.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+        try:
+            if self.socket:
+                self.socket.close()
+        except OSError:
+            pass
+        self.socket = None
+        self.status_label.config(text="Disconnected", fg="red")
+        self.connect_button.config(state=tk.NORMAL)
+        self.disconnect_button.config(state=tk.DISABLED)
+        self.display_message("Client", "You left the chat.", "system")
 
     def insert_emoji(self, emoji):
         self.message_entry.insert(tk.INSERT, emoji)
@@ -207,12 +245,7 @@ class ChatGUI:
         self.incoming.put({"type": "system", "sender": "Bot", "content": reply})
 
     def close(self):
-        self.connected = False
-        if self.socket:
-            try:
-                self.socket.close()
-            except OSError:
-                pass
+        self.disconnect()
         self.root.destroy()
 
 

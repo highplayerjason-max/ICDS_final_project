@@ -10,6 +10,7 @@ bonus features.
 - Tkinter GUI client
 - Real-time send and receive display
 - Login username
+- Disconnect button and `/quit` command
 - Emoji buttons
 - Sentiment tag for outgoing messages, such as Happy, Excited, Confused,
   Worried, Sad, Angry, Bug/Problem, or Neutral
@@ -53,6 +54,7 @@ In each GUI window:
 3. Send messages.
 4. Test `Who`, `Summary`, `Keywords`, emoji buttons, and `Ask Bot`.
 5. Send a message like `@bot explain this project` to show group interaction.
+6. Click `Disconnect` or type `/quit` to leave the chat.
 
 ## Optional ChatGPT API Configuration
 
