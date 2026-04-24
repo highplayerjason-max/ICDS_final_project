@@ -54,8 +54,8 @@ In each GUI window:
 
 ## Optional ChatGPT API Configuration
 
-The chatbot supports the ChatGPT API and other OpenAI-compatible APIs. It sends
-chat history to the Chat Completions endpoint:
+The chatbot supports the ChatGPT API, DeepSeek API, and other OpenAI-compatible
+APIs. It sends chat history to a Chat Completions style endpoint:
 
 ```text
 POST https://api.openai.com/v1/chat/completions
@@ -74,6 +74,26 @@ python gui_client.py
 If your class-provided API or pi-mono API uses an OpenAI-compatible endpoint, set
 `OPENAI_BASE_URL`, `OPENAI_API_KEY`, and `OPENAI_MODEL` to those values instead.
 If no API key is configured, the GUI automatically uses the local fallback bot.
+
+## Optional DeepSeek API Configuration
+
+DeepSeek uses an OpenAI-compatible API format. Configure these environment
+variables before starting the GUI:
+
+```powershell
+$env:DEEPSEEK_API_KEY="your_deepseek_key"
+$env:AI_BASE_URL="https://api.deepseek.com"
+$env:AI_MODEL="deepseek-chat"
+python gui_client.py
+```
+
+You can also save the DeepSeek key permanently for the current Windows user:
+
+```powershell
+[Environment]::SetEnvironmentVariable("DEEPSEEK_API_KEY", "your_deepseek_key", "User")
+[Environment]::SetEnvironmentVariable("AI_BASE_URL", "https://api.deepseek.com", "User")
+[Environment]::SetEnvironmentVariable("AI_MODEL", "deepseek-chat", "User")
+```
 
 ## Demo Checklist
 

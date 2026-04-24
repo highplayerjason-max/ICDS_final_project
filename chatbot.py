@@ -50,9 +50,21 @@ class SimpleContextBot:
 class OpenAICompatibleBot(SimpleContextBot):
     def __init__(self, personality="friendly teaching assistant"):
         super().__init__(personality)
-        self.api_key = os.getenv("OPENAI_API_KEY") or os.getenv("PI_MONO_API_KEY")
-        self.base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-        self.model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        self.provider = os.getenv("AI_PROVIDER", "").strip().lower()
+        self.api_key = (
+            os.getenv("AI_API_KEY")
+            or os.getenv("DEEPSEEK_API_KEY")
+            or os.getenv("OPENAI_API_KEY")
+            or os.getenv("PI_MONO_API_KEY")
+        )
+        if os.getenv("DEEPSEEK_API_KEY") and not os.getenv("AI_BASE_URL") and not os.getenv("OPENAI_BASE_URL"):
+            self.provider = self.provider or "deepseek"
+            self.base_url = "https://api.deepseek.com"
+            self.model = os.getenv("AI_MODEL") or os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+        else:
+            self.provider = self.provider or "openai-compatible"
+            self.base_url = os.getenv("AI_BASE_URL") or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+            self.model = os.getenv("AI_MODEL") or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
     def chat(self, user_message):
         if not self.api_key:
