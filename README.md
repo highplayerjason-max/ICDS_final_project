@@ -11,7 +11,8 @@ bonus features.
 - Real-time send and receive display
 - Login username
 - Emoji buttons
-- Sentiment tag for outgoing messages: Positive, Neutral, or Negative
+- Sentiment tag for outgoing messages, such as Happy, Excited, Confused,
+  Worried, Sad, Angry, Bug/Problem, or Neutral
 - Chatbot with context and editable personality
 - Chat history commands:
   - `/who`
@@ -51,9 +52,17 @@ In each GUI window:
 3. Send messages.
 4. Test `Who`, `Summary`, `Keywords`, emoji buttons, and `Ask Bot`.
 
-## Optional API Configuration
+## Optional ChatGPT API Configuration
 
-The chatbot supports OpenAI-compatible APIs:
+The chatbot supports the ChatGPT API and other OpenAI-compatible APIs. It sends
+chat history to the Chat Completions endpoint:
+
+```text
+POST https://api.openai.com/v1/chat/completions
+Authorization: Bearer OPENAI_API_KEY
+```
+
+Configure it with environment variables before starting the GUI:
 
 ```powershell
 $env:OPENAI_API_KEY="your_key"
@@ -63,7 +72,8 @@ python gui_client.py
 ```
 
 If your class-provided API or pi-mono API uses an OpenAI-compatible endpoint, set
-`OPENAI_BASE_URL`, `OPENAI_API_KEY`, and `OPENAI_MODEL` to those values.
+`OPENAI_BASE_URL`, `OPENAI_API_KEY`, and `OPENAI_MODEL` to those values instead.
+If no API key is configured, the GUI automatically uses the local fallback bot.
 
 ## Demo Checklist
 
@@ -71,7 +81,7 @@ If your class-provided API or pi-mono API uses an OpenAI-compatible endpoint, se
 - Start two GUI clients with different names.
 - Send messages from both clients and show both sent and received messages.
 - Use emoji buttons.
-- Show sentiment labels beside messages.
+- Show detailed sentiment labels beside messages.
 - Click `Who`.
 - Send several chat messages, then click `Summary` and `Keywords`.
 - Click `Bot Personality`, set a personality, then use `Ask Bot`.

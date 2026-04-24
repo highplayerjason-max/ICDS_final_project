@@ -21,7 +21,8 @@ Target length: 10-15 minutes.
 - Send messages from both clients.
 - Show that each client displays both sent and received messages.
 - Use emoji buttons.
-- Show sentiment tags such as `[Positive]`, `[Neutral]`, or `[Negative]`.
+- Show detailed sentiment tags such as `[Happy]`, `[Confused]`, `[Bug/Problem]`,
+  or `[Neutral]`.
 - Click `Who` to show online users.
 - Click `Summary` and `Keywords` after several messages.
 - Set chatbot personality.
@@ -45,6 +46,8 @@ Target length: 10-15 minutes.
   - Server stores recent chat history for `/summary` and `/keywords`.
   - GUI updates are handled on the Tkinter main thread using a queue.
   - Chatbot runs on the client side so it can be used without changing server logic.
+  - The chatbot can call ChatGPT through an OpenAI-compatible Chat Completions API
+    when `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_MODEL` are configured.
 
 ## 4. Analysis and Reflection
 
@@ -63,6 +66,7 @@ Target length: 10-15 minutes.
   - store chat history in a database
   - invite the chatbot into group chat automatically when mentioned
   - replace simple sentiment rules with a stronger NLP model
+  - invite the chatbot into group chat automatically when mentioned
 
 ## 5. Presentation Quality Tips
 

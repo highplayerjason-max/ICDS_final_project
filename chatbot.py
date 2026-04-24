@@ -79,24 +79,42 @@ class OpenAICompatibleBot(SimpleContextBot):
 
 
 def analyze_sentiment(text):
-    positive_words = {
-        "good", "great", "excellent", "happy", "love", "like", "thanks", "nice",
-        "awesome", "cool", "成功", "开心", "喜欢", "谢谢", "好", "棒",
-    }
-    negative_words = {
-        "bad", "sad", "angry", "hate", "bug", "error", "fail", "failed",
-        "problem", "hungry", "tired", "饿", "难过", "生气", "错误", "失败",
+    categories = {
+        "Excited": {
+            "awesome", "amazing", "excellent", "great", "cool", "wow",
+            "excited", "perfect", "fantastic", "棒", "太好了", "牛", "激动",
+        },
+        "Happy": {
+            "happy", "glad", "love", "like", "thanks", "thank", "nice",
+            "开心", "喜欢", "谢谢", "爱", "满意",
+        },
+        "Confused": {
+            "confused", "unclear", "why", "how", "what", "stuck", "question",
+            "不懂", "不会", "为什么", "怎么", "疑惑", "卡住",
+        },
+        "Worried": {
+            "worried", "nervous", "afraid", "scared", "deadline", "urgent",
+            "担心", "紧张", "害怕", "来不及", "急",
+        },
+        "Sad": {
+            "sad", "upset", "tired", "hungry", "lonely", "disappointed",
+            "难过", "累", "饿", "失望", "不开心",
+        },
+        "Angry": {
+            "angry", "mad", "hate", "annoying", "terrible", "awful",
+            "生气", "烦", "讨厌", "糟糕", "离谱",
+        },
+        "Bug/Problem": {
+            "bug", "error", "fail", "failed", "problem", "crash", "broken",
+            "错误", "失败", "报错", "崩溃", "问题", "坏了",
+        },
     }
     lowered = text.lower()
-    score = 0
-    for word in positive_words:
-        if word in lowered:
-            score += 1
-    for word in negative_words:
-        if word in lowered:
-            score -= 1
-    if score > 0:
-        return "Positive"
-    if score < 0:
-        return "Negative"
-    return "Neutral"
+    scores = {}
+    for category, words in categories.items():
+        scores[category] = sum(1 for word in words if word in lowered)
+
+    best_category = max(scores, key=scores.get)
+    if scores[best_category] == 0:
+        return "Neutral"
+    return best_category
