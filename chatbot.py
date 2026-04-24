@@ -7,6 +7,22 @@ import urllib.request
 import json
 
 
+def get_env(name, default=None):
+    value = os.getenv(name)
+    if value:
+        return value
+    if os.name == "nt":
+        try:
+            import winreg
+
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+                value, _ = winreg.QueryValueEx(key, name)
+                return value or default
+        except OSError:
+            return default
+    return default
+
+
 class SimpleContextBot:
     def __init__(self, personality="friendly teaching assistant"):
         self.personality = personality
@@ -50,26 +66,29 @@ class SimpleContextBot:
 class OpenAICompatibleBot(SimpleContextBot):
     def __init__(self, personality="friendly teaching assistant"):
         super().__init__(personality)
-        self.provider = os.getenv("AI_PROVIDER", "").strip().lower()
+        self.provider = (get_env("AI_PROVIDER", "") or "").strip().lower()
         self.api_key = (
-            os.getenv("AI_API_KEY")
-            or os.getenv("DEEPSEEK_API_KEY")
-            or os.getenv("OPENAI_API_KEY")
-            or os.getenv("PI_MONO_API_KEY")
+            get_env("AI_API_KEY")
+            or get_env("DEEPSEEK_API_KEY")
+            or get_env("OPENAI_API_KEY")
+            or get_env("PI_MONO_API_KEY")
         )
-        if os.getenv("DEEPSEEK_API_KEY") and not os.getenv("AI_BASE_URL") and not os.getenv("OPENAI_BASE_URL"):
+        deepseek_key = get_env("DEEPSEEK_API_KEY")
+        ai_base_url = get_env("AI_BASE_URL")
+        openai_base_url = get_env("OPENAI_BASE_URL")
+        if deepseek_key and not ai_base_url and not openai_base_url:
             self.provider = self.provider or "deepseek"
             self.base_url = "https://api.deepseek.com"
-            self.model = os.getenv("AI_MODEL") or os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+            self.model = get_env("AI_MODEL") or get_env("DEEPSEEK_MODEL", "deepseek-chat")
         else:
             self.provider = self.provider or "openai-compatible"
-            self.base_url = os.getenv("AI_BASE_URL") or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-            self.model = os.getenv("AI_MODEL") or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+            self.base_url = ai_base_url or openai_base_url or "https://api.openai.com/v1"
+            self.model = get_env("AI_MODEL") or get_env("OPENAI_MODEL", "gpt-4o-mini")
 
     def chat(self, user_message):
         if not self.api_key:
-            self.last_error = "OPENAI_API_KEY is not configured for this process."
-            return "ChatGPT API is not configured. Please set OPENAI_API_KEY and restart the GUI."
+            self.last_error = "No API key found. Set DEEPSEEK_API_KEY or OPENAI_API_KEY and restart the GUI."
+            return "AI API is not configured. Please set an API key and restart the GUI."
         self.history.append(("user", user_message))
         try:
             reply = self._api_reply()
