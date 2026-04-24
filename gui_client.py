@@ -197,6 +197,8 @@ class ChatGUI:
 
     def get_bot_reply(self, prompt):
         reply = self.bot.chat(prompt)
+        if self.bot.last_error:
+            reply = f"{reply}\n(API fallback: {self.bot.last_error})"
         self.incoming.put({"type": "system", "sender": "Bot", "content": reply})
 
     def close(self):

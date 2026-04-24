@@ -9,6 +9,7 @@ class SimpleContextBot:
     def __init__(self, personality="friendly teaching assistant"):
         self.personality = personality
         self.history = []
+        self.last_error = ""
 
     def set_personality(self, personality):
         self.personality = personality.strip() or "friendly teaching assistant"
@@ -21,6 +22,8 @@ class SimpleContextBot:
 
     def _local_reply(self, user_message):
         text = user_message.lower()
+        if self._contains_abuse(text):
+            return "Please keep the chat respectful. I can still help with the project, debugging, or presentation script."
         if any(word in text for word in ["hello", "hi", "hey", "你好"]):
             return f"Hi! I am acting as a {self.personality}. What would you like to discuss?"
         if any(word in text for word in ["summary", "summarize", "总结"]):
@@ -29,11 +32,17 @@ class SimpleContextBot:
         if any(word in text for word in ["help", "project", "final"]):
             return "For this project, focus on showing the GUI, socket communication, chatbot context, and one bonus feature clearly in the demo."
         starters = [
-            "I understand. Based on our previous messages,",
-            "Good point. With that context,",
-            "As your selected personality, I would say",
+            "I can help with that. Please give me one specific goal or question.",
+            "For the final project, I can help explain code, debug errors, or write demo text.",
+            "Please ask a project-related question, and I will answer directly.",
         ]
-        return f"{random.choice(starters)} {user_message}"
+        return random.choice(starters)
+
+    def _contains_abuse(self, text):
+        blocked_words = {
+            "nigga", "nigger", "faggot", "retard",
+        }
+        return any(word in text for word in blocked_words)
 
 
 class OpenAICompatibleBot(SimpleContextBot):
@@ -45,11 +54,14 @@ class OpenAICompatibleBot(SimpleContextBot):
 
     def chat(self, user_message):
         if not self.api_key:
+            self.last_error = "OPENAI_API_KEY is not configured for this process."
             return super().chat(user_message)
         self.history.append(("user", user_message))
         try:
             reply = self._api_reply()
-        except (urllib.error.URLError, TimeoutError, KeyError, ValueError):
+            self.last_error = ""
+        except (urllib.error.URLError, TimeoutError, KeyError, ValueError) as exc:
+            self.last_error = f"{type(exc).__name__}: {exc}"
             reply = super()._local_reply(user_message)
         self.history.append(("assistant", reply))
         return reply
