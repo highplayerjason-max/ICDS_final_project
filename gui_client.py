@@ -156,6 +156,11 @@ class ChatGUI:
             self.socket.sendall(encode_message("chat", self.username, content))
         except OSError:
             self.display_message("Client", "Message failed to send.", "system")
+            return
+        if text.lower().startswith("@bot"):
+            prompt = text[4:].strip()
+            if prompt:
+                threading.Thread(target=self.get_bot_reply, args=(prompt,), daemon=True).start()
 
     def send_command(self, command):
         if not self.ensure_connected():

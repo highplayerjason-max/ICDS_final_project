@@ -14,6 +14,7 @@ bonus features.
 - Sentiment tag for outgoing messages, such as Happy, Excited, Confused,
   Worried, Sad, Angry, Bug/Problem, or Neutral
 - Chatbot with context and editable personality
+- Chatbot group interaction with `@bot` mention
 - Chat history commands:
   - `/who`
   - `/summary`
@@ -51,6 +52,7 @@ In each GUI window:
 2. Click `Connect`.
 3. Send messages.
 4. Test `Who`, `Summary`, `Keywords`, emoji buttons, and `Ask Bot`.
+5. Send a message like `@bot explain this project` to show group interaction.
 
 ## Optional ChatGPT API Configuration
 

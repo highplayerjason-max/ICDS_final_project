@@ -27,6 +27,8 @@ Target length: 10-15 minutes.
 - Click `Summary` and `Keywords` after several messages.
 - Set chatbot personality.
 - Ask the chatbot a question and show context-aware response.
+- Send `@bot explain this project` in the normal chat input to show chatbot
+  group interaction.
 - Show one meaningful pi-mono usage, such as:
   - generating the first Tkinter GUI structure,
   - debugging the receive thread,
@@ -64,9 +66,9 @@ Target length: 10-15 minutes.
   - add password authentication
   - add file transfer
   - store chat history in a database
-  - invite the chatbot into group chat automatically when mentioned
+  - chatbot can participate in group chat when mentioned with `@bot`
   - replace simple sentiment rules with a stronger NLP model
-  - invite the chatbot into group chat automatically when mentioned
+  - improve bot routing so only one client answers when multiple clients mention `@bot`
 
 ## 5. Presentation Quality Tips
 
