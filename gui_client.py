@@ -4,7 +4,7 @@ import threading
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, simpledialog
 
-from chatbot import OpenAICompatibleBot, analyze_sentiment
+from chatbot import OpenAICompatibleBot
 from protocol import decode_messages, encode_message
 
 
@@ -168,13 +168,22 @@ class ChatGUI:
             return
         if not self.ensure_connected():
             return
-        sentiment = analyze_sentiment(text)
+        threading.Thread(target=self.send_chat_with_sentiment, args=(text,), daemon=True).start()
+
+    def send_chat_with_sentiment(self, text):
+        sentiment = self.bot.classify_sentiment(text)
         content = f"{text} [{sentiment}]"
         try:
             self.socket.sendall(encode_message("chat", self.username, content))
         except OSError:
-            self.display_message("Client", "Message failed to send.", "system")
+            self.incoming.put({"type": "system", "sender": "Client", "content": "Message failed to send."})
             return
+        if sentiment == "Sentiment API Error" and self.bot.last_error:
+            self.incoming.put({
+                "type": "system",
+                "sender": "Sentiment",
+                "content": f"API error detail: {self.bot.last_error}",
+            })
         if text.lower().startswith("@bot"):
             prompt = text[4:].strip()
             if prompt:

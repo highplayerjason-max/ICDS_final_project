@@ -21,8 +21,8 @@ Target length: 10-15 minutes.
 - Send messages from both clients.
 - Show that each client displays both sent and received messages.
 - Use emoji buttons.
-- Show detailed sentiment tags such as `[Happy]`, `[Confused]`, `[Bug/Problem]`,
-  or `[Neutral]`.
+- Show API-based sentiment tags such as `[Happy]`, `[Confused]`,
+  `[Bug/Problem]`, or `[Neutral]`.
 - Click `Who` to show online users.
 - Click `Summary` and `Keywords` after several messages.
 - Set chatbot personality.
@@ -51,6 +51,8 @@ Target length: 10-15 minutes.
   - Chatbot runs on the client side so it can be used without changing server logic.
   - The chatbot can call ChatGPT through an OpenAI-compatible Chat Completions API
     when `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_MODEL` are configured.
+  - Sentiment analysis uses the same OpenAI-compatible API and asks the model to
+    return one fixed emotion label.
 
 ## 4. Analysis and Reflection
 

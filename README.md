@@ -12,8 +12,8 @@ bonus features.
 - Login username
 - Disconnect button and `/quit` command
 - Emoji buttons
-- Sentiment tag for outgoing messages, such as Happy, Excited, Confused,
-  Worried, Sad, Angry, Bug/Problem, or Neutral
+- API-based sentiment tag for outgoing messages, such as Happy, Excited,
+  Confused, Worried, Sad, Angry, Bug/Problem, or Neutral
 - Chatbot with context and editable personality
 - Chatbot group interaction with `@bot` mention
 - Chat history commands:
@@ -105,7 +105,7 @@ You can also save the DeepSeek key permanently for the current Windows user:
 - Start two GUI clients with different names.
 - Send messages from both clients and show both sent and received messages.
 - Use emoji buttons.
-- Show detailed sentiment labels beside messages.
+- Show detailed API-based sentiment labels beside messages.
 - Click `Who`.
 - Send several chat messages, then click `Summary` and `Keywords`.
 - Click `Bot Personality`, set a personality, then use `Ask Bot`.

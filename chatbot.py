@@ -98,6 +98,45 @@ class OpenAICompatibleBot(SimpleContextBot):
         self.history.append(("assistant", reply))
         return reply
 
+    def classify_sentiment(self, text):
+        if not self.api_key:
+            self.last_error = "No API key found. Set DEEPSEEK_API_KEY or OPENAI_API_KEY and restart the GUI."
+            return "Sentiment API Error"
+        labels = [
+            "Excited",
+            "Happy",
+            "Confused",
+            "Worried",
+            "Sad",
+            "Angry",
+            "Bug/Problem",
+            "Neutral",
+        ]
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Classify the user's message into exactly one sentiment label. "
+                    "Allowed labels: Excited, Happy, Confused, Worried, Sad, Angry, "
+                    "Bug/Problem, Neutral. Reply with only the label."
+                ),
+            },
+            {"role": "user", "content": text},
+        ]
+        try:
+            reply = self._chat_completion(messages).strip()
+            self.last_error = ""
+        except (urllib.error.URLError, TimeoutError, KeyError, ValueError, subprocess.SubprocessError, OSError) as exc:
+            self.last_error = self._format_error(exc)
+            return "Sentiment API Error"
+        for label in labels:
+            if label.lower() == reply.lower():
+                return label
+        for label in labels:
+            if label.lower() in reply.lower():
+                return label
+        return "Neutral"
+
     def _format_error(self, exc):
         if isinstance(exc, subprocess.CalledProcessError):
             stderr = self._decode_process_output(exc.stderr).strip()
@@ -123,6 +162,9 @@ class OpenAICompatibleBot(SimpleContextBot):
         ]
         for role, content in self.history[-10:]:
             messages.append({"role": role, "content": content})
+        return self._chat_completion(messages)
+
+    def _chat_completion(self, messages):
         body = json.dumps({"model": self.model, "messages": messages}, ensure_ascii=True)
         try:
             data = self._urllib_chat_completion(body.encode("utf-8"))
