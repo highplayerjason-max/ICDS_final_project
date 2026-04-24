@@ -1,5 +1,7 @@
 import os
 import random
+import subprocess
+import tempfile
 import urllib.error
 import urllib.request
 import json
@@ -55,16 +57,24 @@ class OpenAICompatibleBot(SimpleContextBot):
     def chat(self, user_message):
         if not self.api_key:
             self.last_error = "OPENAI_API_KEY is not configured for this process."
-            return super().chat(user_message)
+            return "ChatGPT API is not configured. Please set OPENAI_API_KEY and restart the GUI."
         self.history.append(("user", user_message))
         try:
             reply = self._api_reply()
             self.last_error = ""
-        except (urllib.error.URLError, TimeoutError, KeyError, ValueError) as exc:
-            self.last_error = f"{type(exc).__name__}: {exc}"
-            reply = super()._local_reply(user_message)
+        except (urllib.error.URLError, TimeoutError, KeyError, ValueError, subprocess.SubprocessError, OSError) as exc:
+            self.last_error = self._format_error(exc)
+            reply = f"ChatGPT API error: {self.last_error}"
         self.history.append(("assistant", reply))
         return reply
+
+    def _format_error(self, exc):
+        if isinstance(exc, subprocess.CalledProcessError):
+            stderr = (exc.stderr or "").strip()
+            if stderr:
+                return f"curl exited with code {exc.returncode}: {stderr}"
+            return f"curl exited with code {exc.returncode}"
+        return f"{type(exc).__name__}: {exc}"
 
     def _api_reply(self):
         messages = [
@@ -75,7 +85,16 @@ class OpenAICompatibleBot(SimpleContextBot):
         ]
         for role, content in self.history[-10:]:
             messages.append({"role": role, "content": content})
-        body = json.dumps({"model": self.model, "messages": messages}).encode("utf-8")
+        body = json.dumps({"model": self.model, "messages": messages}, ensure_ascii=False)
+        try:
+            data = self._urllib_chat_completion(body.encode("utf-8"))
+        except urllib.error.URLError as exc:
+            if "unknown url type: https" not in str(exc):
+                raise
+            data = self._curl_chat_completion(body)
+        return data["choices"][0]["message"]["content"].strip()
+
+    def _urllib_chat_completion(self, body):
         request = urllib.request.Request(
             self.base_url.rstrip("/") + "/chat/completions",
             data=body,
@@ -86,8 +105,43 @@ class OpenAICompatibleBot(SimpleContextBot):
             },
         )
         with urllib.request.urlopen(request, timeout=20) as response:
-            data = json.loads(response.read().decode("utf-8"))
-        return data["choices"][0]["message"]["content"].strip()
+            return json.loads(response.read().decode("utf-8"))
+
+    def _curl_chat_completion(self, body):
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as temp_file:
+                temp_file.write(body)
+                temp_path = temp_file.name
+            result = subprocess.run(
+                [
+                    "curl.exe",
+                    "--silent",
+                    "--show-error",
+                    "--fail",
+                    "--request",
+                    "POST",
+                    "--url",
+                    f'{self.base_url.rstrip("/")}/chat/completions',
+                    "--header",
+                    f"Authorization: Bearer {self.api_key}",
+                    "--header",
+                    "Content-Type: application/json",
+                    "--data-binary",
+                    "@" + temp_path,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=True,
+            )
+            return json.loads(result.stdout)
+        finally:
+            if temp_path:
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
 
 
 def analyze_sentiment(text):
