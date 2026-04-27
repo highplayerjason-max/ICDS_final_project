@@ -6,18 +6,26 @@ import json
 
 
 class SimpleContextBot:
-    def __init__(self, personality="friendly teaching assistant"):
+    def __init__(self, personality="friendly teaching assistant", max_history=20):
         self.personality = personality
+        self.max_history = max_history
         self.history = []
+        self.last_status = "local"
 
     def set_personality(self, personality):
         self.personality = personality.strip() or "friendly teaching assistant"
 
     def chat(self, user_message):
-        self.history.append(("user", user_message))
+        self._append_history("user", user_message)
         reply = self._local_reply(user_message)
-        self.history.append(("assistant", reply))
+        self.last_status = "local"
+        self._append_history("assistant", reply)
         return reply
+
+    def _append_history(self, role, content):
+        self.history.append((role, content))
+        if len(self.history) > self.max_history:
+            self.history = self.history[-self.max_history:]
 
     def _local_reply(self, user_message):
         text = user_message.lower()
@@ -37,8 +45,8 @@ class SimpleContextBot:
 
 
 class OpenAICompatibleBot(SimpleContextBot):
-    def __init__(self, personality="friendly teaching assistant"):
-        super().__init__(personality)
+    def __init__(self, personality="friendly teaching assistant", max_history=20):
+        super().__init__(personality, max_history=max_history)
         self.api_key = os.getenv("OPENAI_API_KEY") or os.getenv("PI_MONO_API_KEY")
         self.base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
         self.model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
@@ -46,12 +54,20 @@ class OpenAICompatibleBot(SimpleContextBot):
     def chat(self, user_message):
         if not self.api_key:
             return super().chat(user_message)
-        self.history.append(("user", user_message))
+        self._append_history("user", user_message)
         try:
             reply = self._api_reply()
-        except (urllib.error.URLError, TimeoutError, KeyError, ValueError):
+            self.last_status = "api"
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            KeyError,
+            ValueError,
+            json.JSONDecodeError,
+        ):
             reply = super()._local_reply(user_message)
-        self.history.append(("assistant", reply))
+            self.last_status = "fallback"
+        self._append_history("assistant", reply)
         return reply
 
     def _api_reply(self):
