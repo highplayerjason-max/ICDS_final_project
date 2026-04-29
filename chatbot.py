@@ -1,9 +1,21 @@
+import json
 import os
 import random
 import subprocess
 import urllib.error
 import urllib.request
-import json
+
+
+SENTIMENT_LABELS = [
+    "Excited",
+    "Happy",
+    "Confused",
+    "Worried",
+    "Sad",
+    "Angry",
+    "Bug/Problem",
+    "Neutral",
+]
 
 
 def get_env(name, default=None):
@@ -23,27 +35,36 @@ def get_env(name, default=None):
 
 
 class SimpleContextBot:
-    def __init__(self, personality="friendly teaching assistant"):
+    def __init__(self, personality="friendly teaching assistant", max_history=20):
         self.personality = personality
+        self.max_history = max_history
         self.history = []
         self.last_error = ""
+        self.last_status = "local"
 
     def set_personality(self, personality):
         self.personality = personality.strip() or "friendly teaching assistant"
 
     def chat(self, user_message):
-        self.history.append(("user", user_message))
+        self._append_history("user", user_message)
         reply = self._local_reply(user_message)
-        self.history.append(("assistant", reply))
+        self.last_error = ""
+        self.last_status = "local"
+        self._append_history("assistant", reply)
         return reply
+
+    def _append_history(self, role, content):
+        self.history.append((role, content))
+        if len(self.history) > self.max_history:
+            self.history = self.history[-self.max_history:]
 
     def _local_reply(self, user_message):
         text = user_message.lower()
         if self._contains_abuse(text):
             return "Please keep the chat respectful. I can still help with the project, debugging, or presentation script."
-        if any(word in text for word in ["hello", "hi", "hey", "你好"]):
+        if any(word in text for word in ["hello", "hi", "hey"]):
             return f"Hi! I am acting as a {self.personality}. What would you like to discuss?"
-        if any(word in text for word in ["summary", "summarize", "总结"]):
+        if any(word in text for word in ["summary", "summarize"]):
             recent = [message for role, message in self.history[-6:] if role == "user"]
             return "Here is a short summary: " + "; ".join(recent[-3:])
         if any(word in text for word in ["help", "project", "final"]):
@@ -56,15 +77,13 @@ class SimpleContextBot:
         return random.choice(starters)
 
     def _contains_abuse(self, text):
-        blocked_words = {
-            "nigga", "nigger", "faggot", "retard",
-        }
+        blocked_words = {"nigga", "nigger", "faggot", "retard"}
         return any(word in text for word in blocked_words)
 
 
 class OpenAICompatibleBot(SimpleContextBot):
-    def __init__(self, personality="friendly teaching assistant"):
-        super().__init__(personality)
+    def __init__(self, personality="friendly teaching assistant", max_history=20):
+        super().__init__(personality, max_history=max_history)
         self.provider = (get_env("AI_PROVIDER", "") or "").strip().lower()
         self.api_key = (
             get_env("AI_API_KEY")
@@ -86,32 +105,33 @@ class OpenAICompatibleBot(SimpleContextBot):
 
     def chat(self, user_message):
         if not self.api_key:
-            self.last_error = "No API key found. Set DEEPSEEK_API_KEY or OPENAI_API_KEY and restart the GUI."
-            return "AI API is not configured. Please set an API key and restart the GUI."
-        self.history.append(("user", user_message))
+            return super().chat(user_message)
+        self._append_history("user", user_message)
         try:
             reply = self._api_reply()
             self.last_error = ""
-        except (urllib.error.URLError, TimeoutError, KeyError, ValueError, subprocess.SubprocessError, OSError) as exc:
+            self.last_status = "api"
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            KeyError,
+            ValueError,
+            json.JSONDecodeError,
+            subprocess.SubprocessError,
+            OSError,
+        ) as exc:
             self.last_error = self._format_error(exc)
-            reply = f"ChatGPT API error: {self.last_error}"
-        self.history.append(("assistant", reply))
+            reply = super()._local_reply(user_message)
+            self.last_status = "fallback"
+        self._append_history("assistant", reply)
         return reply
 
     def classify_sentiment(self, text):
         if not self.api_key:
-            self.last_error = "No API key found. Set DEEPSEEK_API_KEY or OPENAI_API_KEY and restart the GUI."
-            return "Sentiment API Error"
-        labels = [
-            "Excited",
-            "Happy",
-            "Confused",
-            "Worried",
-            "Sad",
-            "Angry",
-            "Bug/Problem",
-            "Neutral",
-        ]
+            self.last_error = ""
+            self.last_status = "local"
+            return classify_sentiment_locally(text)
+
         messages = [
             {
                 "role": "system",
@@ -126,29 +146,27 @@ class OpenAICompatibleBot(SimpleContextBot):
         try:
             reply = self._chat_completion(messages).strip()
             self.last_error = ""
-        except (urllib.error.URLError, TimeoutError, KeyError, ValueError, subprocess.SubprocessError, OSError) as exc:
+            self.last_status = "api"
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            KeyError,
+            ValueError,
+            json.JSONDecodeError,
+            subprocess.SubprocessError,
+            OSError,
+        ) as exc:
             self.last_error = self._format_error(exc)
-            return "Sentiment API Error"
-        for label in labels:
+            self.last_status = "fallback"
+            return classify_sentiment_locally(text)
+
+        for label in SENTIMENT_LABELS:
             if label.lower() == reply.lower():
                 return label
-        for label in labels:
+        for label in SENTIMENT_LABELS:
             if label.lower() in reply.lower():
                 return label
         return "Neutral"
-
-    def _format_error(self, exc):
-        if isinstance(exc, subprocess.CalledProcessError):
-            stderr = self._decode_process_output(exc.stderr).strip()
-            if stderr:
-                return f"curl exited with code {exc.returncode}: {stderr}"
-            return f"curl exited with code {exc.returncode}"
-        return f"{type(exc).__name__}: {exc}"
-
-    def _decode_process_output(self, value):
-        if isinstance(value, bytes):
-            return value.decode("utf-8", errors="replace")
-        return value or ""
 
     def _api_reply(self):
         messages = [
@@ -181,7 +199,7 @@ class OpenAICompatibleBot(SimpleContextBot):
             method="POST",
             headers={
                 "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
+                "Content-Type": "application/json; charset=utf-8",
             },
         )
         with urllib.request.urlopen(request, timeout=20) as response:
@@ -212,44 +230,58 @@ class OpenAICompatibleBot(SimpleContextBot):
         )
         return json.loads(result.stdout.decode("utf-8"))
 
+    def _format_error(self, exc):
+        if isinstance(exc, subprocess.CalledProcessError):
+            stderr = self._decode_process_output(exc.stderr).strip()
+            if stderr:
+                return f"curl exited with code {exc.returncode}: {stderr}"
+            return f"curl exited with code {exc.returncode}"
+        return f"{type(exc).__name__}: {exc}"
 
-def analyze_sentiment(text):
+    def _decode_process_output(self, value):
+        if isinstance(value, bytes):
+            return value.decode("utf-8", errors="replace")
+        return value or ""
+
+
+def classify_sentiment_locally(text):
     categories = {
         "Excited": {
             "awesome", "amazing", "excellent", "great", "cool", "wow",
-            "excited", "perfect", "fantastic", "棒", "太好了", "牛", "激动",
+            "excited", "perfect", "fantastic",
         },
         "Happy": {
             "happy", "glad", "love", "like", "thanks", "thank", "nice",
-            "开心", "喜欢", "谢谢", "爱", "满意",
         },
         "Confused": {
             "confused", "unclear", "why", "how", "what", "stuck", "question",
-            "不懂", "不会", "为什么", "怎么", "疑惑", "卡住",
         },
         "Worried": {
             "worried", "nervous", "afraid", "scared", "deadline", "urgent",
-            "担心", "紧张", "害怕", "来不及", "急",
         },
         "Sad": {
             "sad", "upset", "tired", "hungry", "lonely", "disappointed",
-            "难过", "累", "饿", "失望", "不开心",
         },
         "Angry": {
             "angry", "mad", "hate", "annoying", "terrible", "awful",
-            "生气", "烦", "讨厌", "糟糕", "离谱",
         },
         "Bug/Problem": {
             "bug", "error", "fail", "failed", "problem", "crash", "broken",
-            "错误", "失败", "报错", "崩溃", "问题", "坏了",
         },
     }
     lowered = text.lower()
-    scores = {}
-    for category, words in categories.items():
-        scores[category] = sum(1 for word in words if word in lowered)
-
+    scores = {
+        category: sum(1 for word in words if word in lowered)
+        for category, words in categories.items()
+    }
     best_category = max(scores, key=scores.get)
     if scores[best_category] == 0:
         return "Neutral"
     return best_category
+
+
+_sentiment_bot = OpenAICompatibleBot("sentiment classifier")
+
+
+def analyze_sentiment(text):
+    return _sentiment_bot.classify_sentiment(text)
