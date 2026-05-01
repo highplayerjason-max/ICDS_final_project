@@ -2,7 +2,14 @@ import socket
 import threading
 from collections import Counter, deque
 
-from chatbot import OpenAICompatibleBot
+from chatbot import (
+    OpenAICompatibleBot, 
+    extract_keywords, 
+    extract_summary,
+    generate_image_pollinations,
+    analyze_sentiment,
+    analyze_sentiment_textblob
+)
 from protocol import ProtocolError, decode_messages, encode_message
 
 
@@ -170,8 +177,22 @@ class ChatServer:
             self.send_user_list(client_socket)
         elif command == "/summary":
             self.send_to(client_socket, "system", "Summary", self.make_summary(conversation_id))
+        elif command == "/summary_nlp":
+            self.send_to(client_socket, "system", "Summary (NLP)", self.make_summary_nlp(conversation_id))
         elif command == "/keywords":
             self.send_to(client_socket, "system", "Keywords", self.make_keywords(conversation_id))
+        elif command.startswith("/image "):
+            prompt = raw_command[len("/image "):].strip()
+            threading.Thread(
+                target=self.generate_and_send_image,
+                args=(client_socket, prompt, conversation_id),
+                daemon=True,
+            ).start()
+        elif command.startswith("/sentiment "):
+            text = raw_command[len("/sentiment "):].strip()
+            sentiment_info = analyze_sentiment_textblob(text)
+            result = f"Sentiment: {sentiment_info['sentiment']} {sentiment_info['emoji']} (Polarity: {sentiment_info['polarity']})"
+            self.send_to(client_socket, "system", "Sentiment", result)
         elif command == "/rooms":
             self.send_room_list(client_socket)
         elif command == "/bot join":
@@ -202,7 +223,8 @@ class ChatServer:
                 client_socket,
                 "system",
                 "Server",
-                "Commands: /who, /summary, /keywords, /rooms, /bot join, /bot leave, /bot status, /bot personality <style>",
+                "Commands: /who, /summary, /summary_nlp, /keywords, /image <prompt>, /sentiment <text>, "
+                "/rooms, /bot join, /bot leave, /bot status, /bot personality <style>",
             )
         else:
             self.send_to(client_socket, "system", "Server", f"Unknown command: {command}")
@@ -215,29 +237,47 @@ class ChatServer:
         if not recent:
             return "No chat history yet."
         speakers = sorted({name for name, _ in recent})
-        topics = self.extract_keywords([text for _, text in recent], limit=5)
+        topics = extract_keywords([text for _, text in recent], limit=5)
         return f"Recent chat has {len(recent)} messages from {', '.join(speakers)}. Main topics: {', '.join(topics) or 'none'}."
 
     def make_keywords(self, conversation_id=PUBLIC_ROOM_ID):
         history = self.histories.get(conversation_id, [])
-        words = self.extract_keywords([text for _, text in history], limit=8)
+        words = extract_keywords([text for _, text in history], limit=8)
         return ", ".join(words) if words else "No keywords yet."
 
+    def make_summary_nlp(self, conversation_id=PUBLIC_ROOM_ID):
+        """Generate summary using NLP-based approach."""
+        history = self.histories.get(conversation_id, [])
+        texts = [text for _, text in history]
+        if not texts:
+            return "No chat history yet."
+        summary = extract_summary(texts, max_sentences=3)
+        return summary
+
+    def generate_and_send_image(self, client_socket, prompt, conversation_id):
+        """Generate image using Pollinations.ai and send to client."""
+        try:
+            self.send_to(client_socket, "system", "Image", f"Generating image for: {prompt}...")
+            image_data = generate_image_pollinations(prompt)
+            
+            if image_data:
+                import base64
+                image_b64 = base64.b64encode(image_data).decode('utf-8')
+                self.send_to(
+                    client_socket, 
+                    "image", 
+                    "Image Generator", 
+                    f"Image generated: {prompt}",
+                    metadata={"image_data": image_b64, "prompt": prompt}
+                )
+            else:
+                self.send_to(client_socket, "system", "Image", "Failed to generate image. Please try again.")
+        except Exception as e:
+            self.send_to(client_socket, "system", "Image", f"Error: {str(e)}")
+
     def extract_keywords(self, texts, limit=8):
-        stop_words = {
-            "the", "and", "you", "are", "for", "with", "that", "this", "have",
-            "just", "but", "not", "can", "will", "from", "about", "what", "when",
-            "where", "how", "why", "is", "am", "to", "of", "in", "on", "it", "a",
-            "an", "i", "me", "my", "we", "our", "your", "了", "的", "是", "我",
-            "你", "他", "她", "它", "们", "和", "在", "有",
-        }
-        counter = Counter()
-        for text in texts:
-            cleaned = "".join(ch.lower() if ch.isalnum() else " " for ch in text)
-            for word in cleaned.split():
-                if len(word) > 2 and word not in stop_words:
-                    counter[word] += 1
-        return [word for word, _ in counter.most_common(limit)]
+        """Fallback local method - uses imported version from chatbot module."""
+        return extract_keywords(texts, limit=limit)
 
     def should_bot_reply(self, conversation_id, text):
         lowered = text.lower()

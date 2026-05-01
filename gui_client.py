@@ -3,8 +3,17 @@ import socket
 import threading
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, simpledialog
+import base64
 
-from chatbot import analyze_sentiment
+# Optional imports
+try:
+    from io import BytesIO
+    from PIL import Image, ImageTk
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+
+from chatbot import analyze_sentiment, analyze_sentiment_textblob
 from protocol import ProtocolError, decode_messages, encode_message
 
 
@@ -129,12 +138,18 @@ class ChatGUI:
         tk.Button(tools, text="Who", command=lambda: self.send_command("/who")).pack(side=tk.LEFT, padx=(0, 4))
         tk.Button(tools, text="Summary", command=lambda: self.send_command("/summary")).pack(side=tk.LEFT, padx=4)
         tk.Button(tools, text="Keywords", command=lambda: self.send_command("/keywords")).pack(side=tk.LEFT, padx=4)
+        tk.Button(tools, text="Summary NLP", command=lambda: self.send_command("/summary_nlp")).pack(side=tk.LEFT, padx=4)
+        tk.Button(tools, text="Generate Image", command=self.generate_image_dialog).pack(side=tk.LEFT, padx=4)
         tk.Button(tools, text="Invite Bot", command=lambda: self.send_command("/bot join")).pack(side=tk.LEFT, padx=4)
-        tk.Button(tools, text="Bot Personality", command=self.set_bot_personality).pack(side=tk.LEFT, padx=4)
-        tk.Button(tools, text="Ask Bot", command=self.ask_group_bot).pack(side=tk.LEFT, padx=4)
-        tk.Button(tools, text="Game", command=self.open_game_window).pack(side=tk.LEFT, padx=4)
         for emoji in ["😊", "😂", "👍", "❤️"]:
             tk.Button(tools, text=emoji, width=3, command=lambda e=emoji: self.insert_emoji(e)).pack(side=tk.RIGHT, padx=2)
+
+        tools2 = tk.Frame(composer, bg="#f7f7f7")
+        tools2.pack(fill=tk.X, pady=(0, 6))
+        tk.Button(tools2, text="Bot Personality", command=self.set_bot_personality).pack(side=tk.LEFT, padx=(0, 4))
+        tk.Button(tools2, text="Ask Bot", command=self.ask_group_bot).pack(side=tk.LEFT, padx=4)
+        tk.Button(tools2, text="Analyze Sentiment", command=self.analyze_sentiment_dialog).pack(side=tk.LEFT, padx=4)
+        tk.Button(tools2, text="Game", command=self.open_game_window).pack(side=tk.LEFT, padx=4)
 
         input_frame = tk.Frame(composer, bg="#f7f7f7")
         input_frame.pack(fill=tk.X)
@@ -224,6 +239,11 @@ class ChatGUI:
                 tag = "bot" if sender == "Bot" else "me" if sender == self.username else "other"
                 display_sender = "Me" if sender == self.username else sender
                 self.add_message(conversation_id, display_sender, content, tag)
+            elif message_type == "image":
+                conversation_id = message.get("conversation_id") or self.current_conversation_id
+                self.handle_image_message(message)
+                content = f"[Image: {message.get('metadata', {}).get('prompt', 'Generated Image')}]"
+                self.add_message(conversation_id, sender, content, "system")
             elif message_type == "disconnect":
                 self.disconnect()
                 self.add_message(self.current_conversation_id, sender, content, "system")
@@ -550,6 +570,63 @@ class ChatGUI:
             self.chat_area.insert(tk.END, f"{sender}: {content}\n", tag)
         self.chat_area.see(tk.END)
         self.chat_area.config(state=tk.DISABLED)
+
+    def generate_image_dialog(self):
+        """Show dialog for image generation."""
+        if not self.ensure_connected():
+            return
+        prompt = simpledialog.askstring(
+            "Generate Image",
+            "Enter image prompt (e.g., 'a beautiful sunset over mountains'):"
+        )
+        if prompt:
+            self.send_command(f"/image {prompt}")
+
+    def analyze_sentiment_dialog(self):
+        """Show dialog for sentiment analysis."""
+        if not self.ensure_connected():
+            return
+        text = simpledialog.askstring(
+            "Analyze Sentiment",
+            "Enter text to analyze:"
+        )
+        if text:
+            self.send_command(f"/sentiment {text}")
+
+    def handle_image_message(self, message):
+        """Handle image message and display it."""
+        try:
+            metadata = message.get("metadata", {})
+            image_b64 = metadata.get("image_data", "")
+            prompt = metadata.get("prompt", "Generated Image")
+            
+            if not PIL_AVAILABLE:
+                messagebox.showinfo("Image Generated", f"Image generated successfully!\n\nPrompt: {prompt}\n\nNote: Install PIL/Pillow to view images: pip install pillow")
+                return
+            
+            if image_b64:
+                # Decode image data
+                image_data = base64.b64decode(image_b64)
+                img = Image.open(BytesIO(image_data))
+                
+                # Create a new window to display the image
+                img_window = tk.Toplevel(self.root)
+                img_window.title(f"Image: {prompt}")
+                
+                # Resize image for display (max 600x600)
+                img.thumbnail((600, 600), Image.Resampling.LANCZOS)
+                
+                # Convert PIL image to PhotoImage
+                photo = ImageTk.PhotoImage(img)
+                
+                label = tk.Label(img_window, image=photo)
+                label.image = photo  # Keep a reference
+                label.pack(padx=10, pady=10)
+                
+                info_label = tk.Label(img_window, text=f"Prompt: {prompt}", wraplength=400)
+                info_label.pack(padx=10, pady=5)
+        except Exception as e:
+            messagebox.showerror("Image Error", f"Failed to display image: {str(e)}")
 
     def close(self):
         self.disconnect()
