@@ -273,7 +273,12 @@ class ChatServer:
             else:
                 self.send_to(client_socket, "system", "Image", "Failed to generate image. Please try again.")
         except Exception as e:
-            self.send_to(client_socket, "system", "Image", f"Error: {str(e)}")
+            self.send_to(
+            client_socket,
+            "system",
+            "Image",
+            f"Image generation error: {type(e).__name__}: {repr(e)}",
+            )
 
     def extract_keywords(self, texts, limit=8):
         """Fallback local method - uses imported version from chatbot module."""

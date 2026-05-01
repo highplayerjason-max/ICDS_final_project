@@ -625,7 +625,10 @@ class ChatGUI:
                 info_label = tk.Label(img_window, text=f"Prompt: {prompt}", wraplength=400)
                 info_label.pack(padx=10, pady=5)
         except Exception as e:
-            messagebox.showerror("Image Error", f"Failed to display image: {str(e)}")
+            messagebox.showerror(
+                        "Image Error",
+                        f"Failed to display image: {type(e).__name__}: {repr(e)}"
+                    )
 
     def close(self):
         self.disconnect()

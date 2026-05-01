@@ -386,8 +386,7 @@ def generate_image_pollinations(prompt: str, width=512, height=512) -> bytes:
         img = Image.open(BytesIO(image_data))
         return image_data
     except Exception as e:
-        print(f"Image generation failed: {e}")
-        return None
+        raise RuntimeError(f"{type(e).__name__}: {repr(e)}") from e
 
 
 def generate_image_replicate(prompt: str, api_token: str = None) -> str:
