@@ -18,7 +18,7 @@ from protocol import ProtocolError, decode_messages, encode_message
 
 
 DEFAULT_HOST = "127.0.0.1"
-DEFAULT_PORT = 5000
+DEFAULT_PORT = 5001
 PUBLIC_ROOM_ID = "public"
 PUBLIC_ROOM_NAME = "Public Chat"
 

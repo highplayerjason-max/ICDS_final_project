@@ -1,10 +1,8 @@
 # Distributed Chat Final Project
 
 This project is a socket-based distributed chat system with a Tkinter GUI client.
-It includes the compulsory GUI topic, a chatbot selective topic, and several small
-bonus features.
-
-**👉 [快速开始指南](QUICK_START.md) | [完整文档](#quick-links)**
+It includes the compulsory GUI topic, chatbot and online gaming selective topics,
+and multiple bonus features.
 
 ## Features
 
@@ -29,10 +27,14 @@ bonus features.
   - `/bot join`
   - `/bot leave`
   - `/bot status`
+- AI image generation with `/image <prompt>`
+- NLP summary and keyword extraction
+- Enhanced sentiment analysis with local fallback
 
 The chatbot and sentiment classifier can use an OpenAI-compatible API when
 environment variables are set. If no API key is available, the demo falls back to
-local rule-based chatbot and sentiment behavior.
+local rule-based chatbot and sentiment behavior. AI image generation uses
+Pollinations.ai and requires network access.
 
 ## Files
 
@@ -42,8 +44,6 @@ local rule-based chatbot and sentiment behavior.
 - `chatbot.py`: chatbot, sentiment analysis, NLP, and image generation
 - `system_structure.md`: system structure and robustness explanation
 - `presentation_outline.md`: suggested video and slide structure
-- `FEATURES_GUIDE.md`: detailed guide for all advanced features
-- `requirements.txt`: Python package dependencies
 
 ## How to Run
 
@@ -59,50 +59,40 @@ Open one or more other terminals for clients:
 python gui_client.py
 ```
 
+The default server port is `5001`. The GUI client also defaults to port `5001`.
+For another computer on the same network, run `server.py` on one computer and
+enter that computer's LAN IP address in the GUI Host field.
+
 In each GUI window:
 
 1. Enter a username.
 2. Click `Connect`.
 3. Select `Public Chat` or an online friend in the left sidebar.
-<<<<<<< HEAD
 4. Send messages with automatic sentiment tagging.
 5. Test commands and features:
    - Click `Who`, `Summary`, `Summary NLP`, `Keywords` for analysis
    - Click `Generate Image` to create AI images
    - Click `Analyze Sentiment` for detailed sentiment analysis
    - Click `Invite Bot`, `Bot Personality`, `Ask Bot`, and `Game` for other features
-
-## Installation
-
-### Basic Setup (Pollinations.ai - Free)
-```powershell
-pip install Pillow
-python server.py
-python gui_client.py
-```
-
-### Full Setup (All Features)
-```powershell
-# Install all dependencies
-pip install Pillow textblob yake sumy nltk replicate
-
-# Download NLTK data
-python -m nltk.downloader punkt brown
-
-# Run the application
-python server.py
-python gui_client.py
-```
-
-For detailed feature usage, see [FEATURES_GUIDE.md](FEATURES_GUIDE.md).
-=======
-4. Send messages.
-5. Test `Who`, `Summary`, `Keywords`, emoji buttons, `Invite Bot`, `Ask Bot`, and `Game`.
 6. Send a message like `@bot explain this project` to show group interaction.
 7. Click `Disconnect` or type `/quit` to leave the chat.
 
+## Installation
+
+The core chat system uses Python standard libraries. For image display and
+certificate handling, install:
+
+```powershell
+pip install Pillow certifi
+```
+
+For enhanced sentiment analysis, install TextBlob:
+
+```powershell
+pip install textblob
+```
+
 ## Optional ChatGPT API Configuration
->>>>>>> 561096614036acd141b522286207ea1aaa96bd78
 
 The chatbot supports the ChatGPT API, DeepSeek API, and other OpenAI-compatible
 APIs. It sends chat history to a Chat Completions style endpoint:
@@ -153,28 +143,10 @@ You can also save the DeepSeek key permanently for the current Windows user:
 - Use emoji buttons.
 - Show detailed API-based sentiment labels beside messages.
 - Click `Who`.
-- Send several chat messages, then click `Summary` and `Keywords`.
+- Send several chat messages, then click `Summary`, `Summary NLP`, and `Keywords`.
+- Click `Generate Image` and display an AI-generated image.
 - Click `Invite Bot`, mention `@bot`, and show the bot replying to the whole group.
 - Click `Bot Personality`, set a personality, then use `Ask Bot`.
 - Click `Game` in two different clients, join Tic-Tac-Toe, and show turns, board sync, and win/draw detection.
 - Show pi-mono usage during development, such as code generation, debugging, or
   documentation support.
-
-## Quick Links <a name="quick-links"></a>
-
-- 🚀 [快速开始](QUICK_START.md) - 30 秒启动
-- 📚 [功能指南](FEATURES_GUIDE.md) - 详细的功能说明
-- 🔍 [快速参考](QUICK_REFERENCE.md) - 命令快速查询
-- 💡 [使用示例](USAGE_EXAMPLES.md) - 真实场景示例
-- ⚙️ [部署和测试](DEPLOYMENT_AND_TESTING.md) - 测试清单
-- 📋 [项目总结](PROJECT_COMPLETION_REPORT.md) - 完成报告
-- 🔧 [实现细节](IMPLEMENTATION_SUMMARY.md) - 技术细节
-
-## New Advanced Features
-
-See [QUICK_START.md](QUICK_START.md) for a 30-second introduction to:
-1. **AI Image Generation** - Generate images with simple text prompts
-2. **NLP Text Analysis** - Extract keywords and create summaries
-3. **Sentiment Analysis** - Automatic emotion detection with emojis
-
-All features work out-of-the-box with no API keys needed!
