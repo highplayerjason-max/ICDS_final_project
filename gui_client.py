@@ -175,6 +175,7 @@ class ChatGUI:
             self.socket.sendall(encode_message("login", self.username, ""))
         except OSError as exc:
             messagebox.showerror("Connection failed", str(exc))
+            self.socket = None
             return
         self.connected = True
         self.status_label.config(text="Connected", fg="green")
@@ -183,16 +184,24 @@ class ChatGUI:
         threading.Thread(target=self.receive_loop, daemon=True).start()
 
     def disconnect(self):
+        was_connected = self.connected or self.socket is not None
         self.connected = False
-        if self.socket:
-            try:
+        try:
+            if self.socket:
+                self.socket.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+        try:
+            if self.socket:
                 self.socket.close()
-            except OSError:
-                pass
+        except OSError:
+            pass
         self.socket = None
         self.status_label.config(text="Disconnected", fg="#c0392b")
         self.connect_button.config(state=tk.NORMAL)
         self.disconnect_button.config(state=tk.DISABLED)
+        if was_connected:
+            self.add_message(self.current_conversation_id, "Client", "You left the chat.", "system")
 
     def receive_loop(self):
         buffer = b""
@@ -205,10 +214,12 @@ class ChatGUI:
                 messages, buffer = decode_messages(buffer)
                 for message in messages:
                     self.incoming.put(message)
-            except (OSError, ValueError):
+            except (OSError, ValueError, ProtocolError):
                 break
-        self.connected = False
-        self.incoming.put({"type": "disconnect", "sender": "Client", "content": "Disconnected from server."})
+        if self.connected:
+            self.connected = False
+            self.socket = None
+            self.incoming.put({"type": "disconnect", "sender": "Client", "content": "Disconnected from server."})
 
     def process_incoming(self):
         while True:
@@ -268,13 +279,20 @@ class ChatGUI:
         text = self.message_entry.get("1.0", tk.END).strip()
         if not text:
             return
+        if text.lower() in {"/quit", "/exit", "/disconnect"}:
+            self.message_entry.delete("1.0", tk.END)
+            self.disconnect()
+            return
         if text.startswith("/"):
             self.send_command(text)
             self.message_entry.delete("1.0", tk.END)
             return
+        self.message_entry.delete("1.0", tk.END)
+        threading.Thread(target=self.send_chat_text, args=(text,), daemon=True).start()
+
+    def send_chat_text(self, text):
         if not self.ensure_connected():
             return
-        self.message_entry.delete("1.0", tk.END)
         sentiment = analyze_sentiment(text)
         content = f"{text} [{sentiment}]"
         try:
@@ -289,7 +307,7 @@ class ChatGUI:
                 )
             )
         except (OSError, ProtocolError):
-            self.display_message("Client", "Message failed to send.", "system")
+            self.incoming.put({"type": "system", "sender": "Client", "content": "Message failed to send."})
 
     def send_command(self, command):
         if not self.ensure_connected():
@@ -311,7 +329,7 @@ class ChatGUI:
     def ensure_connected(self):
         if self.connected:
             return True
-        messagebox.showwarning("Not connected", "Start server.py first, then connect.")
+        self.incoming.put({"type": "system", "sender": "Client", "content": "Start server.py first, then connect."})
         return False
 
     def insert_emoji(self, emoji):
@@ -338,26 +356,7 @@ class ChatGUI:
             return
         self.message_entry.delete("1.0", tk.END)
         self.send_command("/bot join")
-        self.send_chat_text(f"@bot {prompt}")
-
-    def send_chat_text(self, text):
-        if not self.ensure_connected():
-            return
-        sentiment = analyze_sentiment(text)
-        content = f"{text} [{sentiment}]"
-        try:
-            self.socket.sendall(
-                encode_message(
-                    "chat",
-                    self.username,
-                    content,
-                    conversation_type=self.current_conversation_type,
-                    conversation_id=self.current_conversation_id,
-                    target=self.current_target,
-                )
-            )
-        except (OSError, ProtocolError):
-            self.display_message("Client", "Message failed to send.", "system")
+        threading.Thread(target=self.send_chat_text, args=(f"@bot {prompt}",), daemon=True).start()
 
     def open_game_window(self):
         if not self.ensure_connected():
