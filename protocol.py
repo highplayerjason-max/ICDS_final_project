@@ -2,7 +2,7 @@ import json
 
 
 ENCODING = "utf-8"
-MAX_MESSAGE_BYTES = 2*16 * 1024
+MAX_MESSAGE_BYTES = 4 * 1024 * 1024
 
 
 class ProtocolError(ValueError):

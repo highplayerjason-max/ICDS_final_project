@@ -10,7 +10,7 @@ from chatbot import (
     analyze_sentiment,
     analyze_sentiment_textblob
 )
-from protocol import ProtocolError, decode_messages, encode_message
+from protocol import MAX_MESSAGE_BYTES, ProtocolError, decode_messages, encode_message
 
 
 HOST = "0.0.0.0"
@@ -263,6 +263,14 @@ class ChatServer:
             if image_data:
                 import base64
                 image_b64 = base64.b64encode(image_data).decode('utf-8')
+                if len(image_b64.encode("utf-8")) > MAX_MESSAGE_BYTES:
+                    self.send_to(
+                        client_socket,
+                        "system",
+                        "Image",
+                        "Generated image is too large to send through the chat protocol.",
+                    )
+                    return
                 self.send_to(
                     client_socket, 
                     "image", 
@@ -508,7 +516,18 @@ class ChatServer:
     def send_to(self, client_socket, message_type, sender, content, **extra):
         try:
             client_socket.sendall(encode_message(message_type, sender, content, **extra))
-        except (OSError, ProtocolError):
+        except ProtocolError as exc:
+            try:
+                client_socket.sendall(
+                    encode_message(
+                        "system",
+                        "Server",
+                        f"Message could not be sent: {type(exc).__name__}: {exc}",
+                    )
+                )
+            except (OSError, ProtocolError):
+                self.remove_client(client_socket, self.get_username(client_socket))
+        except OSError:
             self.remove_client(client_socket, self.get_username(client_socket))
 
     def send_user_list(self, client_socket):

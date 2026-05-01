@@ -2,11 +2,17 @@ import json
 import os
 import random
 import subprocess
+import ssl
 import urllib.error
 import urllib.request
 import urllib.parse
 import json
 import threading
+
+try:
+    import certifi
+except ImportError:
+    certifi = None
 
 # Optional imports
 try:
@@ -378,8 +384,9 @@ def generate_image_pollinations(prompt: str, width=512, height=512) -> bytes:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
         request = urllib.request.Request(url, headers=headers)
+        context = ssl.create_default_context(cafile=certifi.where()) if certifi else ssl.create_default_context()
 
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=30, context=context) as response:
             image_data = response.read()
 
         # Verify it's a valid image
