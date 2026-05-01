@@ -14,7 +14,7 @@ from protocol import ProtocolError, decode_messages, encode_message
 
 
 HOST = "0.0.0.0"
-PORT = 5000
+PORT = 5001
 PUBLIC_ROOM_ID = "public"
 PUBLIC_ROOM_NAME = "Public Chat"
 BOT_NAME = "Bot"
