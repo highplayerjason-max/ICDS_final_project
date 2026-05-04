@@ -32,6 +32,13 @@ def get_env(key, default=""):
 
 # ========== Constants ==========
 
+# Optional repo-local DeepSeek defaults.
+# Fill DEFAULT_DEEPSEEK_API_KEY if you want server.py to use DeepSeek without
+# setting environment variables on the machine that runs the server.
+DEFAULT_DEEPSEEK_API_KEY = "sk-3283c0bc283147e7985481c99c3a70d5"
+DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEFAULT_DEEPSEEK_MODEL = "deepseek-chat"
+
 SENTIMENT_LABELS = [
     "Excited", "Happy", "Confused", "Worried", "Sad", "Angry", "Bug/Problem", "Neutral"
 ]
@@ -87,20 +94,22 @@ class SimpleContextBot:
 class OpenAICompatibleBot(SimpleContextBot):
     def __init__(self, personality="friendly teaching assistant", max_history=20):
         super().__init__(personality, max_history=max_history)
+        repo_deepseek_key = DEFAULT_DEEPSEEK_API_KEY.strip()
         self.provider = (get_env("AI_PROVIDER", "") or "").strip().lower()
         self.api_key = (
             get_env("AI_API_KEY")
             or get_env("DEEPSEEK_API_KEY")
             or get_env("OPENAI_API_KEY")
             or get_env("PI_MONO_API_KEY")
+            or repo_deepseek_key
         )
         deepseek_key = get_env("DEEPSEEK_API_KEY")
         ai_base_url = get_env("AI_BASE_URL")
         openai_base_url = get_env("OPENAI_BASE_URL")
-        if deepseek_key and not ai_base_url and not openai_base_url:
+        if (deepseek_key or repo_deepseek_key) and not ai_base_url and not openai_base_url:
             self.provider = self.provider or "deepseek"
-            self.base_url = "https://api.deepseek.com"
-            self.model = get_env("AI_MODEL") or get_env("DEEPSEEK_MODEL", "deepseek-chat")
+            self.base_url = DEFAULT_DEEPSEEK_BASE_URL
+            self.model = get_env("AI_MODEL") or get_env("DEEPSEEK_MODEL", DEFAULT_DEEPSEEK_MODEL)
         else:
             self.provider = self.provider or "openai-compatible"
             self.base_url = ai_base_url or openai_base_url or "https://api.openai.com/v1"
