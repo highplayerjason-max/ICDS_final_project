@@ -1,6 +1,6 @@
 # Distributed Chat (Course Project)
 
-A TCP socket chat system with a custom line-oriented text protocol, a Tkinter GUI client, server-side command handling, an optional OpenAI-compatible chat API, a group chat bot, networked tic-tac-toe, and AI image fetch via Pollinations.
+A TCP socket chat system with a custom line-oriented text protocol, a Tkinter GUI client, server-side command handling, an optional DeepSeek chat API, a group chat bot, networked tic-tac-toe, and AI image fetch via Pollinations.
 
 ## Features
 
@@ -16,7 +16,7 @@ A TCP socket chat system with a custom line-oriented text protocol, a Tkinter GU
 - Server-side group bot, personality, `@bot` mentions
 - Commands: `/who`, `/summary`, `/summary_nlp`, `/keywords`, `/image`, `/sentiment`, bot commands
 - Optional networked tic-tac-toe
-- Optional OpenAI-compatible API; without keys, a local rule-based bot and sentiment fallback apply
+- Optional DeepSeek API; without keys, a local rule-based bot and sentiment fallback apply
 
 Image generation is performed on the **server** (Pollinations over HTTPS, bytes validated), then sent inside protocol messages as Base64. The client needs **Pillow** to open a window and show the image.
 
@@ -89,35 +89,25 @@ If SSL still fails or the proxy returns an HTML block page, the server surfaces 
 
 **Note**: A single frame cannot exceed `MAX_MESSAGE_BYTES`; oversized raw images are rejected with a clear server message instead of being forced through `encode_message`.
 
-## Optional: OpenAI-compatible API
+## Optional: DeepSeek API
 
 Set environment variables **before** starting the server and clients, for example:
 
 ```bash
-export OPENAI_API_KEY="your_key"
-export OPENAI_BASE_URL="https://api.openai.com/v1"
-export OPENAI_MODEL="gpt-4o-mini"
+export DEEPSEEK_API_KEY="your_deepseek_key"
+export DEEPSEEK_BASE_URL="https://api.deepseek.com"
+export DEEPSEEK_MODEL="deepseek-chat"
 ```
 
 Windows PowerShell:
 
 ```powershell
-$env:OPENAI_API_KEY="your_key"
-$env:OPENAI_BASE_URL="https://api.openai.com/v1"
-$env:OPENAI_MODEL="gpt-4o-mini"
-```
-
-Without keys, the group bot uses local rules; see `chatbot.py`.
-
-## Optional: DeepSeek
-
-Example OpenAI-compatible variables:
-
-```powershell
 $env:DEEPSEEK_API_KEY="your_deepseek_key"
-$env:AI_BASE_URL="https://api.deepseek.com"
-$env:AI_MODEL="deepseek-chat"
+$env:DEEPSEEK_BASE_URL="https://api.deepseek.com"
+$env:DEEPSEEK_MODEL="deepseek-chat"
 ```
+
+Without keys, the group bot uses local rules; see `chatbot.py`. This repo can also include a default DeepSeek key in `chatbot.py` for classroom demo use.
 
 ## Repository layout
 

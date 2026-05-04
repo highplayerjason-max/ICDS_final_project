@@ -48,10 +48,10 @@ Target length: 10-15 minutes.
   - JSON-line messages are easier to parse than plain text messages.
   - Server stores recent chat history for `/summary` and `/keywords`.
   - GUI updates are handled on the Tkinter main thread using a queue.
-  - Chatbot runs on the client side so it can be used without changing server logic.
-  - The chatbot can call ChatGPT through an OpenAI-compatible Chat Completions API
-    when `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_MODEL` are configured.
-  - Sentiment analysis uses the same OpenAI-compatible API and asks the model to
+  - Chatbot runs on the server side so it can join the public group chat.
+  - The chatbot calls DeepSeek when `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`,
+    and `DEEPSEEK_MODEL` are configured.
+  - Sentiment analysis uses the same DeepSeek API and asks the model to
     return one fixed emotion label.
 
 ## 4. Analysis and Reflection

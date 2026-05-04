@@ -62,7 +62,7 @@ Users can select `Public Chat` for group messages or click an online friend for 
 Main parts:
 
 - `SimpleContextBot`: local fallback bot with personality and short conversation context
-- `OpenAICompatibleBot`: optional API-backed bot using OpenAI-compatible chat completions
+- `DeepSeekBot`: optional API-backed bot using DeepSeek chat completions
 - `analyze_sentiment`: rule-based Positive/Neutral/Negative tagger
 
 The chatbot history now has a maximum length, so long demos do not grow memory forever. It also records whether the latest reply came from the API, local mode, or fallback mode.
@@ -87,7 +87,7 @@ flowchart TD
     joinCommand --> server[server.py]
     server --> groupState[Bot enabled in Public Chat]
     userMention["@bot message"] --> server
-    server --> bot[OpenAICompatibleBot]
+    server --> bot[DeepSeekBot]
     bot --> botReply[Bot reply]
     botReply --> broadcast[Broadcast to all group clients]
 ```

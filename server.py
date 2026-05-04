@@ -3,7 +3,7 @@ import threading
 from collections import Counter, deque
 
 from chatbot import (
-    OpenAICompatibleBot, 
+    DeepSeekBot,
     extract_keywords, 
     extract_summary,
     generate_image_pollinations,
@@ -29,7 +29,7 @@ class ChatServer:
         self.clients_lock = threading.Lock()
         self.histories = {PUBLIC_ROOM_ID: deque(maxlen=100)}
         self.rooms = {PUBLIC_ROOM_ID: PUBLIC_ROOM_NAME}
-        self.bot = OpenAICompatibleBot("friendly group chat assistant")
+        self.bot = DeepSeekBot("friendly group chat assistant")
         self.bot_lock = threading.Lock()
         self.bot_rooms = set()
         self.game_lock = threading.Lock()
