@@ -1,152 +1,151 @@
-# Distributed Chat Final Project
+# Distributed Chat (Course Project)
 
-This project is a socket-based distributed chat system with a Tkinter GUI client.
-It includes the compulsory GUI topic, chatbot and online gaming selective topics,
-and multiple bonus features.
+A TCP socket chat system with a custom line-oriented text protocol, a Tkinter GUI client, server-side command handling, an optional OpenAI-compatible chat API, a group chat bot, networked tic-tac-toe, and AI image fetch via Pollinations.
 
 ## Features
 
-### Core Features
-- Socket server with multiple clients
-- WeChat-style Tkinter GUI client
-- Real-time send and receive display
-- Login username
-- Disconnect button and `/quit` command
-- Online friend list and direct messages
-- Public group chat
-- Interactive multiplayer Tic-Tac-Toe game
-- Emoji shortcut buttons
-- API-based sentiment tags for outgoing messages, such as Happy, Excited,
-  Confused, Worried, Sad, Angry, Bug/Problem, or Neutral
-- Server-side group chatbot with context and editable personality
-- Chatbot group interaction with `@bot` mention
-- Chat history commands:
-  - `/who`
-  - `/summary`
-  - `/keywords`
-  - `/bot join`
-  - `/bot leave`
-  - `/bot status`
-- AI image generation with `/image <prompt>`
-- NLP summary and keyword extraction
-- Enhanced sentiment analysis with local fallback
+### Core
 
-The chatbot and sentiment classifier can use an OpenAI-compatible API when
-environment variables are set. If no API key is available, the demo falls back to
-local rule-based chatbot and sentiment behavior. AI image generation uses
-Pollinations.ai and requires network access.
+- Multi-client `server.py` with JSON-per-line framing (`protocol.py`)
+- Tkinter client (`gui_client.py`): per-conversation buffers, group and direct chat, online user list
+- Separate login window: host, port, display name, connection status; main window sidebar lists **Group Chats** and **Online Friends** only
+- **Connection** button on the main chat header (right): reopens the login window after it was closed (closing the login window hides it; it does not disconnect an active session)
+- Disconnect and `/quit`-style commands
+- Group and direct messages, emoji shortcut buttons
+- Outbound sentiment tags (rules or API)
+- Server-side group bot, personality, `@bot` mentions
+- Commands: `/who`, `/summary`, `/summary_nlp`, `/keywords`, `/image`, `/sentiment`, bot commands
+- Optional networked tic-tac-toe
+- Optional OpenAI-compatible API; without keys, a local rule-based bot and sentiment fallback apply
 
-## Files
+Image generation is performed on the **server** (Pollinations over HTTPS, bytes validated), then sent inside protocol messages as Base64. The client needs **Pillow** to open a window and show the image.
 
-- `server.py`: multi-client socket chat server with command handling
-- `gui_client.py`: Tkinter GUI chat client with advanced features
-- `protocol.py`: JSON-line message encoding and decoding
-- `chatbot.py`: chatbot, sentiment analysis, NLP, and image generation
-- `system_structure.md`: system structure and robustness explanation
-- `presentation_outline.md`: suggested video and slide structure
+## Protocol and robustness
 
-## How to Run
+- Each message is one UTF-8 JSON object terminated by `\n`.
+- Encoded size per message is capped by `MAX_MESSAGE_BYTES` (default 4 MiB); `encode_message` raises `ProtocolError` if exceeded.
+- On decode:
+  - UTF-8 or JSON failures yield a `protocol_error` message with a short, human-readable `content` (not a single generic sentence).
+  - If the JSON root is not an object, a `protocol_error` is emitted instead of silently dropping the line.
+- The GUI receive thread, on `ProtocolError` (e.g. buffer or line too large), enqueues a system line before tearing down the connection so failures are visible in the chat area.
+- The server prints to standard output when a client handler exits with `ProtocolError` / `OSError`, and when `broadcast` skips a send because `encode_message` raised `ProtocolError`.
 
-Open one terminal for the server:
+## GUI usage
+
+1. After starting `gui_client.py`, a **Login — Distributed Chat** window opens in addition to the main window.
+2. Set Host, Port, and Name, then click **Login** (same `login` wire format as before).
+3. Sidebar: **Group Chats** and **Online Friends** only; pick a room or user to switch conversations.
+4. Closing the login window hides it; use **Connection** on the main header to show it again when changing host/port or disconnecting.
+5. Image messages that cannot be rendered or have an empty payload append a system line in the current conversation and show a dialog when appropriate.
+
+## How to run
+
+**Server (start first):**
+
+```bash
+python server.py
+```
+
+Default bind: `0.0.0.0:5001`. On Windows PowerShell:
 
 ```powershell
 python server.py
 ```
 
-Open one or more other terminals for clients:
+**Clients (one or more):**
 
-```powershell
+```bash
 python gui_client.py
 ```
 
-The default server port is `5001`. The GUI client also defaults to port `5001`.
-For another computer on the same network, run `server.py` on one computer and
-enter that computer's LAN IP address in the GUI Host field.
-
-In each GUI window:
-
-1. Enter a username.
-2. Click `Connect`.
-3. Select `Public Chat` or an online friend in the left sidebar.
-4. Send messages with automatic sentiment tagging.
-5. Test commands and features:
-   - Click `Who`, `Summary`, `Summary NLP`, `Keywords` for analysis
-   - Click `Generate Image` to create AI images
-   - Click `Analyze Sentiment` for detailed sentiment analysis
-   - Click `Invite Bot`, `Bot Personality`, `Ask Bot`, and `Game` for other features
-6. Send a message like `@bot explain this project` to show group interaction.
-7. Click `Disconnect` or type `/quit` to leave the chat.
+In the login window, set Host to `127.0.0.1` for localhost or the server LAN IP; default port is `5001`.
 
 ## Installation
 
-The core chat system uses Python standard libraries. For image display and
-certificate handling, install:
+The core chat path uses the Python standard library. Recommended extras:
 
-```powershell
+```bash
 pip install Pillow certifi
 ```
 
-For enhanced sentiment analysis, install TextBlob:
+- **Pillow**: client displays `/image` payloads; server validates downloaded bytes as an image.
+- **certifi**: supplements CA bundles on non-Windows; on Windows, if the OS trust store path fails TLS, a second attempt uses certifi when it is installed.
 
-```powershell
+Optional richer sentiment:
+
+```bash
 pip install textblob
 ```
 
-## Optional ChatGPT API Configuration
+## Networking and image generation (including Windows)
 
-The chatbot supports the ChatGPT API, DeepSeek API, and other OpenAI-compatible
-APIs. It sends chat history to a Chat Completions style endpoint:
+The server fetches `https://image.pollinations.ai` over HTTPS with:
 
-```text
-POST https://api.openai.com/v1/chat/completions
-Authorization: Bearer OPENAI_API_KEY
+- **System proxy**: `urllib.request.getproxies()` honors `HTTP_PROXY`, `HTTPS_PROXY`, and OS proxy settings (common on Windows).
+- **TLS**: On Windows, `ssl.create_default_context()` uses the OS certificate store first, which helps behind corporate proxies whose roots are only in the system store; on other platforms, certifi is loaded when available.
+- **Timeout**: 90 seconds per image request to tolerate slow proxy paths.
+
+If SSL still fails or the proxy returns an HTML block page, the server surfaces errors as chat system messages to the client that issued `/image`; client-side protocol issues appear as system lines or `protocol_error` text where applicable.
+
+**Note**: A single frame cannot exceed `MAX_MESSAGE_BYTES`; oversized raw images are rejected with a clear server message instead of being forced through `encode_message`.
+
+## Optional: OpenAI-compatible API
+
+Set environment variables **before** starting the server and clients, for example:
+
+```bash
+export OPENAI_API_KEY="your_key"
+export OPENAI_BASE_URL="https://api.openai.com/v1"
+export OPENAI_MODEL="gpt-4o-mini"
 ```
 
-Configure it with environment variables before starting the server and GUI:
+Windows PowerShell:
 
 ```powershell
 $env:OPENAI_API_KEY="your_key"
 $env:OPENAI_BASE_URL="https://api.openai.com/v1"
 $env:OPENAI_MODEL="gpt-4o-mini"
-python server.py
 ```
 
-If your class-provided API or pi-mono API uses an OpenAI-compatible endpoint, set
-`OPENAI_BASE_URL`, `OPENAI_API_KEY`, and `OPENAI_MODEL` to those values instead.
+Without keys, the group bot uses local rules; see `chatbot.py`.
 
-## Optional DeepSeek API Configuration
+## Optional: DeepSeek
 
-DeepSeek uses an OpenAI-compatible API format. Configure these environment
-variables before starting the server and GUI:
+Example OpenAI-compatible variables:
 
 ```powershell
 $env:DEEPSEEK_API_KEY="your_deepseek_key"
 $env:AI_BASE_URL="https://api.deepseek.com"
 $env:AI_MODEL="deepseek-chat"
-python server.py
 ```
 
-You can also save the DeepSeek key permanently for the current Windows user:
+## Repository layout
 
-```powershell
-[Environment]::SetEnvironmentVariable("DEEPSEEK_API_KEY", "your_deepseek_key", "User")
-[Environment]::SetEnvironmentVariable("AI_BASE_URL", "https://api.deepseek.com", "User")
-[Environment]::SetEnvironmentVariable("AI_MODEL", "deepseek-chat", "User")
-```
+| File | Role |
+|------|------|
+| `server.py` | Chat server, commands, game, image pipeline |
+| `gui_client.py` | Tkinter client |
+| `protocol.py` | Encode, decode, size limits |
+| `chatbot.py` | Bot, sentiment, NLP helpers, Pollinations fetch |
+| `system_structure.md` | Architecture and robustness notes |
+| `presentation_outline.md` | Suggested demo outline |
 
-## Demo Checklist
+## Demo checklist
 
-- Start `server.py`.
-- Start two GUI clients with different names.
-- Send messages from both clients and show both sent and received messages.
-- Click an online friend in the left sidebar and send a direct message.
-- Use emoji buttons.
-- Show detailed API-based sentiment labels beside messages.
-- Click `Who`.
-- Send several chat messages, then click `Summary`, `Summary NLP`, and `Keywords`.
-- Click `Generate Image` and display an AI-generated image.
-- Click `Invite Bot`, mention `@bot`, and show the bot replying to the whole group.
-- Click `Bot Personality`, set a personality, then use `Ask Bot`.
-- Click `Game` in two different clients, join Tic-Tac-Toe, and show turns, board sync, and win/draw detection.
-- Show pi-mono usage during development, such as code generation, debugging, or
-  documentation support.
+1. Start `server.py`, then at least two `gui_client.py` instances with different names.
+2. Exchange group messages; confirm send/receive and sentiment tags.
+3. Select an online friend in the sidebar and send a direct message.
+4. Use toolbar **Who**, **Summary**, **Summary NLP**, **Keywords**.
+5. Use **Generate Image** or `/image <prompt>`; confirm server generation and client display (Pillow required).
+6. **Invite Bot**, ask with `@bot`, **Bot Personality**, **Ask Bot**.
+7. Open **Game** on two clients; match, move, and endgame behavior.
+8. If required by the course, show tooling or documentation used during development.
+
+## Troubleshooting
+
+| Symptom | What to check |
+|---------|----------------|
+| Immediate disconnect with a Protocol-related system line | Read the exact text; often line or buffer exceeded `MAX_MESSAGE_BYTES`. |
+| Image always fails on Windows | Proxy and firewall; install `certifi` and retry; read server console and `Image` system lines in chat. |
+| No image window | Install Pillow; check for empty-payload or display-error messages. |
+| Bot never uses the cloud | Ensure variables are set in the **same shell** that launches `server.py`. |

@@ -3,11 +3,11 @@ import os
 import random
 import subprocess
 import ssl
-import urllib.error
-import urllib.request
-import urllib.parse
-import json
+import sys
 import threading
+import urllib.error
+import urllib.parse
+import urllib.request
 
 try:
     import certifi
@@ -366,6 +366,55 @@ def extract_summary(texts, max_sentences=3):
 
 # ========== AI Image Generation ==========
 
+
+def _ssl_context_for_outbound_https():
+    """
+    TLS for HTTPS image fetch. On Windows, use default context (SCHANNEL / OS trust
+    store) so corporate proxy CA roots work; do not force certifi-only, which often
+    breaks SSL behind enterprise MITM proxies.
+    """
+    ctx = ssl.create_default_context()
+    if sys.platform == "win32":
+        return ctx
+    if certifi:
+        try:
+            ctx.load_verify_locations(cafile=certifi.where())
+        except (ssl.SSLError, OSError):
+            pass
+    return ctx
+
+
+def _build_https_opener(ssl_context):
+    """Respect HTTP(S)_PROXY and Windows system proxy via getproxies()."""
+    handlers = [urllib.request.HTTPSHandler(context=ssl_context)]
+    proxies = urllib.request.getproxies()
+    if proxies:
+        handlers.insert(0, urllib.request.ProxyHandler(proxies))
+    return urllib.request.build_opener(*handlers)
+
+
+def _is_ssl_related_error(exc: BaseException) -> bool:
+    if isinstance(exc, ssl.SSLError):
+        return True
+    if isinstance(exc, urllib.error.URLError) and isinstance(exc.reason, ssl.SSLError):
+        return True
+    return False
+
+
+def _looks_like_image_bytes(data: bytes) -> bool:
+    if not data or len(data) < 12:
+        return False
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return True
+    if data[:3] == b"\xff\xd8\xff":
+        return True
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return True
+    if data[:4] == b"RIFF" and len(data) > 12 and data[8:12] == b"WEBP":
+        return True
+    return False
+
+
 def generate_image_pollinations(prompt: str, width=512, height=512) -> bytes:
     """
     Generate image using Pollinations.ai API (free, no registration needed).
@@ -375,25 +424,53 @@ def generate_image_pollinations(prompt: str, width=512, height=512) -> bytes:
         print("PIL not available. Install with: pip install pillow")
         return None
 
+    url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+    }
+    request = urllib.request.Request(url, headers=headers)
+
+    def _fetch_with_context(ctx: ssl.SSLContext):
+        opener = _build_https_opener(ctx)
+        with opener.open(request, timeout=90) as response:
+            raw = response.read()
+            ctype = response.headers.get("Content-Type", "")
+        return raw, ctype
+
     try:
-        # Pollinations.ai uses simple URL format for image generation
-        # The seed parameter ensures reproducibility
-        url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}"
+        ctx = _ssl_context_for_outbound_https()
+        image_data, content_type = _fetch_with_context(ctx)
+    except Exception as first:
+        if sys.platform == "win32" and certifi and _is_ssl_related_error(first):
+            try:
+                alt = ssl.create_default_context()
+                alt.load_verify_locations(cafile=certifi.where())
+                image_data, content_type = _fetch_with_context(alt)
+            except Exception as second:
+                raise RuntimeError(
+                    f"SSL failed (Windows): first try {type(first).__name__}: {first!s}; "
+                    f"certifi retry {type(second).__name__}: {second!s}"
+                ) from second
+        else:
+            raise RuntimeError(f"{type(first).__name__}: {repr(first)}") from first
 
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-        request = urllib.request.Request(url, headers=headers)
-        context = ssl.create_default_context(cafile=certifi.where()) if certifi else ssl.create_default_context()
-
-        with urllib.request.urlopen(request, timeout=30, context=context) as response:
-            image_data = response.read()
-
-        # Verify it's a valid image
-        img = Image.open(BytesIO(image_data))
-        return image_data
+    try:
+        Image.open(BytesIO(image_data)).verify()
     except Exception as e:
-        raise RuntimeError(f"{type(e).__name__}: {repr(e)}") from e
+        head = image_data[:200].decode("utf-8", errors="replace").replace("\n", " ")
+        hint = ""
+        if not _looks_like_image_bytes(image_data):
+            hint = (
+                "Body does not look like a common image signature (PNG/JPEG/WebP/GIF). "
+                "Often a corporate proxy returns an HTML login or block page. "
+            )
+        raise RuntimeError(
+            f"{hint}Content-Type={content_type!r}, preview={head!r}. "
+            f"PIL: {type(e).__name__}: {repr(e)}"
+        ) from e
+
+    return image_data
 
 
 def generate_image_replicate(prompt: str, api_token: str = None) -> str:

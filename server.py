@@ -77,8 +77,8 @@ class ChatServer:
                         self.handle_game_move(client_socket, username, message)
                     elif message_type == "game_leave":
                         self.handle_game_leave(username)
-        except (ConnectionError, OSError, ProtocolError):
-            pass
+        except (ConnectionError, OSError, ProtocolError) as exc:
+            print(f"[server] client handler exit: {type(exc).__name__}: {exc}")
         finally:
             self.remove_client(client_socket, username)
 
@@ -501,7 +501,8 @@ class ChatServer:
     def broadcast(self, message_type, sender, content, exclude=None, **extra):
         try:
             packet = encode_message(message_type, sender, content, **extra)
-        except ProtocolError:
+        except ProtocolError as exc:
+            print(f"[server] broadcast skipped (ProtocolError): type={message_type} sender={sender!r}: {exc}")
             return
         with self.clients_lock:
             sockets = list(self.clients.keys())

@@ -43,12 +43,30 @@ def decode_messages(buffer):
             raise ProtocolError("Message line is too large.")
         try:
             message = json.loads(line.decode(ENCODING))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except UnicodeDecodeError as exc:
+            detail = str(exc).replace("\n", " ")[:400]
             messages.append(
                 {
                     "type": "protocol_error",
                     "sender": "Protocol",
-                    "content": "Received an invalid message and ignored it.",
+                    "content": f"Invalid UTF-8 in message line: {detail}",
+                    "conversation_type": "system",
+                    "conversation_id": "system",
+                    "target": "",
+                    "metadata": {},
+                }
+            )
+            continue
+        except json.JSONDecodeError as exc:
+            detail = exc.msg or str(exc)
+            if exc.lineno is not None:
+                detail = f"{detail} (line {exc.lineno}, col {exc.colno})"
+            detail = detail.replace("\n", " ")[:400]
+            messages.append(
+                {
+                    "type": "protocol_error",
+                    "sender": "Protocol",
+                    "content": f"Invalid JSON: {detail}",
                     "conversation_type": "system",
                     "conversation_id": "system",
                     "target": "",
@@ -57,6 +75,17 @@ def decode_messages(buffer):
             )
             continue
         if not isinstance(message, dict):
+            messages.append(
+                {
+                    "type": "protocol_error",
+                    "sender": "Protocol",
+                    "content": f"Expected a JSON object, got {type(message).__name__}",
+                    "conversation_type": "system",
+                    "conversation_id": "system",
+                    "target": "",
+                    "metadata": {},
+                }
+            )
             continue
         message.setdefault("conversation_type", "group")
         message.setdefault("conversation_id", "public")

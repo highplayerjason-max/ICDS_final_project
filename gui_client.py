@@ -237,7 +237,17 @@ class ChatGUI:
                 messages, buffer = decode_messages(buffer)
                 for message in messages:
                     self.incoming.put(message)
-            except (OSError, ValueError, ProtocolError):
+            except ProtocolError as exc:
+                self.incoming.put(
+                    {
+                        "type": "system",
+                        "sender": "Client",
+                        "content": f"Protocol error (connection closed): {exc}",
+                        "conversation_id": self.current_conversation_id,
+                    }
+                )
+                break
+            except (OSError, ValueError):
                 break
         if self.connected:
             self.connected = False
@@ -275,7 +285,7 @@ class ChatGUI:
                 self.add_message(conversation_id, display_sender, content, tag)
             elif message_type == "image":
                 conversation_id = message.get("conversation_id") or self.current_conversation_id
-                self.handle_image_message(message)
+                self.handle_image_message(message, conversation_id)
                 content = f"[Image: {message.get('metadata', {}).get('prompt', 'Generated Image')}]"
                 self.add_message(conversation_id, sender, content, "system")
             elif message_type == "disconnect":
@@ -283,6 +293,8 @@ class ChatGUI:
                 self.add_message(self.current_conversation_id, sender, content, "system")
             elif message_type in {"game_waiting", "game_start", "game_state", "game_over", "game_error"}:
                 self.handle_game_message(message)
+            elif message_type == "protocol_error":
+                self.add_message(self.current_conversation_id, sender, content, "system")
             else:
                 self.add_message(self.current_conversation_id, sender, content, "system")
         self.root.after(100, self.process_incoming)
@@ -615,43 +627,54 @@ class ChatGUI:
         if text:
             self.send_command(f"/sentiment {text}")
 
-    def handle_image_message(self, message):
+    def handle_image_message(self, message, conversation_id):
         """Handle image message and display it."""
+        metadata = message.get("metadata", {})
+        image_b64 = metadata.get("image_data", "")
+        prompt = metadata.get("prompt", "Generated Image")
+
+        if not PIL_AVAILABLE:
+            messagebox.showinfo(
+                "Image Generated",
+                f"Image generated successfully!\n\nPrompt: {prompt}\n\nNote: Install PIL/Pillow to view images: pip install pillow",
+            )
+            return
+
+        if not image_b64:
+            self.add_message(
+                conversation_id,
+                "Client",
+                "Image message had no image data (empty payload).",
+                "system",
+            )
+            messagebox.showwarning("Image", "Server sent an image message with no image data.")
+            return
+
         try:
-            metadata = message.get("metadata", {})
-            image_b64 = metadata.get("image_data", "")
-            prompt = metadata.get("prompt", "Generated Image")
-            
-            if not PIL_AVAILABLE:
-                messagebox.showinfo("Image Generated", f"Image generated successfully!\n\nPrompt: {prompt}\n\nNote: Install PIL/Pillow to view images: pip install pillow")
-                return
-            
-            if image_b64:
-                # Decode image data
-                image_data = base64.b64decode(image_b64)
-                img = Image.open(BytesIO(image_data))
-                
-                # Create a new window to display the image
-                img_window = tk.Toplevel(self.root)
-                img_window.title(f"Image: {prompt}")
-                
-                # Resize image for display (max 600x600)
-                img.thumbnail((600, 600), Image.Resampling.LANCZOS)
-                
-                # Convert PIL image to PhotoImage
-                photo = ImageTk.PhotoImage(img)
-                
-                label = tk.Label(img_window, image=photo)
-                label.image = photo  # Keep a reference
-                label.pack(padx=10, pady=10)
-                
-                info_label = tk.Label(img_window, text=f"Prompt: {prompt}", wraplength=400)
-                info_label.pack(padx=10, pady=5)
+            image_data = base64.b64decode(image_b64)
+            img = Image.open(BytesIO(image_data))
+
+            img_window = tk.Toplevel(self.root)
+            img_window.title(f"Image: {prompt}")
+
+            try:
+                resample = Image.Resampling.LANCZOS
+            except AttributeError:
+                resample = Image.LANCZOS
+            img.thumbnail((600, 600), resample)
+
+            photo = ImageTk.PhotoImage(img)
+
+            label = tk.Label(img_window, image=photo)
+            label.image = photo
+            label.pack(padx=10, pady=10)
+
+            info_label = tk.Label(img_window, text=f"Prompt: {prompt}", wraplength=400)
+            info_label.pack(padx=10, pady=5)
         except Exception as e:
-            messagebox.showerror(
-                        "Image Error",
-                        f"Failed to display image: {type(e).__name__}: {repr(e)}"
-                    )
+            err = f"Failed to display image: {type(e).__name__}: {repr(e)}"
+            self.add_message(conversation_id, "Client", err, "system")
+            messagebox.showerror("Image Error", err)
 
     def close(self):
         self.disconnect()
