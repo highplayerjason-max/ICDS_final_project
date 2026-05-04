@@ -46,8 +46,10 @@ class ChatGUI:
         self.game_symbol_label = None
         self.current_game_id = ""
         self.current_game_over = False
+        self.login_win = None
 
         self.build_layout()
+        self.build_login_window()
         self.root.after(100, self.process_incoming)
 
     def build_layout(self):
@@ -66,36 +68,56 @@ class ChatGUI:
         self.build_chat_panel()
         self.select_group(PUBLIC_ROOM_ID)
 
-    def build_sidebar(self):
-        connect_frame = tk.Frame(self.sidebar, bg="#ededed", padx=12, pady=12)
-        connect_frame.pack(fill=tk.X)
+    def build_login_window(self):
+        win = tk.Toplevel(self.root)
+        self.login_win = win
+        win.title("Login — Distributed Chat")
+        win.geometry("400x300")
+        win.configure(bg="#ededed")
+        win.protocol("WM_DELETE_WINDOW", self.hide_login_window)
 
-        tk.Label(connect_frame, text="Distributed Chat", bg="#ededed", font=("Arial", 15, "bold")).pack(anchor="w")
-        self.status_label = tk.Label(connect_frame, text="Disconnected", fg="#c0392b", bg="#ededed")
+        pad = tk.Frame(win, bg="#ededed", padx=16, pady=16)
+        pad.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(pad, text="Distributed Chat", bg="#ededed", font=("Arial", 15, "bold")).pack(anchor="w")
+        self.status_label = tk.Label(pad, text="Disconnected", fg="#c0392b", bg="#ededed")
         self.status_label.pack(anchor="w", pady=(2, 10))
 
-        tk.Label(connect_frame, text="Host", bg="#ededed").pack(anchor="w")
-        self.host_entry = tk.Entry(connect_frame)
+        tk.Label(pad, text="Host", bg="#ededed").pack(anchor="w")
+        self.host_entry = tk.Entry(pad)
         self.host_entry.insert(0, DEFAULT_HOST)
         self.host_entry.pack(fill=tk.X, pady=(0, 6))
 
-        tk.Label(connect_frame, text="Port", bg="#ededed").pack(anchor="w")
-        self.port_entry = tk.Entry(connect_frame)
+        tk.Label(pad, text="Port", bg="#ededed").pack(anchor="w")
+        self.port_entry = tk.Entry(pad)
         self.port_entry.insert(0, str(DEFAULT_PORT))
         self.port_entry.pack(fill=tk.X, pady=(0, 6))
 
-        tk.Label(connect_frame, text="Name", bg="#ededed").pack(anchor="w")
-        self.name_entry = tk.Entry(connect_frame)
+        tk.Label(pad, text="Name", bg="#ededed").pack(anchor="w")
+        self.name_entry = tk.Entry(pad)
         self.name_entry.insert(0, "Student")
-        self.name_entry.pack(fill=tk.X, pady=(0, 8))
+        self.name_entry.pack(fill=tk.X, pady=(0, 10))
 
-        buttons = tk.Frame(connect_frame, bg="#ededed")
+        buttons = tk.Frame(pad, bg="#ededed")
         buttons.pack(fill=tk.X)
-        self.connect_button = tk.Button(buttons, text="Connect", command=self.connect)
+        self.connect_button = tk.Button(buttons, text="Login", command=self.connect)
         self.connect_button.pack(side=tk.LEFT, fill=tk.X, expand=True)
         self.disconnect_button = tk.Button(buttons, text="Disconnect", command=self.disconnect, state=tk.DISABLED)
-        self.disconnect_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(6, 0))
+        self.disconnect_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(8, 0))
 
+    def show_login_window(self):
+        if self.login_win is None or not self.login_win.winfo_exists():
+            self.build_login_window()
+        else:
+            self.login_win.deiconify()
+        self.login_win.lift()
+        self.login_win.focus_force()
+
+    def hide_login_window(self):
+        if self.login_win and self.login_win.winfo_exists():
+            self.login_win.withdraw()
+
+    def build_sidebar(self):
         tk.Label(self.sidebar, text="Group Chats", anchor="w", bg="#ededed", fg="#555555", padx=12).pack(fill=tk.X)
         self.room_list = tk.Listbox(self.sidebar, height=4, bd=0, activestyle="none", exportselection=False)
         self.room_list.pack(fill=tk.X, padx=12, pady=(4, 12))
@@ -112,8 +134,9 @@ class ChatGUI:
         header.pack(fill=tk.X)
         self.conversation_label = tk.Label(header, text=PUBLIC_ROOM_NAME, bg="#f7f7f7", font=("Arial", 16, "bold"))
         self.conversation_label.pack(side=tk.LEFT)
+        tk.Button(header, text="Connection", command=self.show_login_window).pack(side=tk.RIGHT)
         self.conversation_hint = tk.Label(header, text="Group chat", bg="#f7f7f7", fg="#777777")
-        self.conversation_hint.pack(side=tk.RIGHT)
+        self.conversation_hint.pack(side=tk.RIGHT, padx=(0, 10))
 
         self.chat_area = scrolledtext.ScrolledText(
             self.chat_panel,
@@ -632,6 +655,8 @@ class ChatGUI:
 
     def close(self):
         self.disconnect()
+        if self.login_win and self.login_win.winfo_exists():
+            self.login_win.destroy()
         self.root.destroy()
 
 
