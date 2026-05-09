@@ -191,7 +191,10 @@ class ChatServer:
         elif command.startswith("/sentiment "):
             text = raw_command[len("/sentiment "):].strip()
             sentiment_info = analyze_sentiment_textblob(text)
-            result = f"Sentiment: {sentiment_info['sentiment']} {sentiment_info['emoji']} (Polarity: {sentiment_info['polarity']})"
+            result = (
+                f"Sentiment: {sentiment_info['sentiment']} {sentiment_info['emoji']} "
+                f"(Source: {sentiment_info.get('status', 'local')})"
+            )
             self.send_to(client_socket, "system", "Sentiment", result)
         elif command == "/rooms":
             self.send_room_list(client_socket)

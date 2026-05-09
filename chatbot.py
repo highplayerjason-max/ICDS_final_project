@@ -379,6 +379,11 @@ _sentiment_bot = DeepSeekBot("sentiment classifier")
 
 
 def analyze_sentiment(text):
+    """Analyze sentiment with DeepSeek first, then local keyword fallback."""
+    return _sentiment_bot.classify_sentiment(text)
+
+
+def analyze_sentiment_locally(text):
     """Analyze sentiment using keyword method. Returns Positive/Neutral/Negative."""
     positive_words = {
         "good", "great", "excellent", "happy", "love", "like", "thanks", "nice",
@@ -593,9 +598,30 @@ def generate_image_replicate(prompt: str, api_token: str = None) -> str:
 
 def analyze_sentiment_textblob(text: str) -> dict:
     """
-    Enhanced sentiment analysis using TextBlob if available, else fallback.
-    Returns dict with sentiment, polarity, subjectivity, and emoji.
+    Enhanced sentiment analysis using DeepSeek if available, else fallback.
+    Returns dict with sentiment, status, and display emoji.
     """
+    result = analyze_sentiment(text)
+    emoji_map = {
+        "Excited": ":D",
+        "Happy": ":)",
+        "Confused": "?",
+        "Worried": ":/",
+        "Sad": ":(",
+        "Angry": ">:(",
+        "Bug/Problem": "!",
+        "Neutral": ":|",
+        "Positive": ":)",
+        "Negative": ":(",
+    }
+    return {
+        "sentiment": result,
+        "emoji": emoji_map.get(result, ":|"),
+        "polarity": 0,
+        "subjectivity": 0,
+        "status": _sentiment_bot.last_status,
+    }
+
     try:
         from textblob import TextBlob
         blob = TextBlob(text)
