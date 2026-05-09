@@ -33,11 +33,16 @@ def get_env(key, default=""):
 # ========== Constants ==========
 
 # Optional repo-local DeepSeek defaults.
-# Fill DEFAULT_DEEPSEEK_API_KEY if you want server.py to use DeepSeek without
-# setting environment variables on the machine that runs the server.
-DEFAULT_DEEPSEEK_API_KEY = "sk-3283c0bc283147e7985481c99c3a70d5"
-DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com"
-DEFAULT_DEEPSEEK_MODEL = "deepseek-chat"
+# Keep BOTH bot API configs together here:
+# - GROUP bot (server-side @bot)
+# - LOCAL bot (GUI Local Bot button)
+DEFAULT_DEEPSEEK_API_KEY_GROUP = "sk-4d8c9df2732843e4942159d5713eee4d"
+DEFAULT_DEEPSEEK_BASE_URL_GROUP = "https://api.deepseek.com"
+DEFAULT_DEEPSEEK_MODEL_GROUP = "deepseek-chat"
+
+DEFAULT_DEEPSEEK_API_KEY_LOCAL = "sk-4d8c9df2732843e4942159d5713eee4d"
+DEFAULT_DEEPSEEK_BASE_URL_LOCAL = "https://api.deepseek.com"
+DEFAULT_DEEPSEEK_MODEL_LOCAL = "deepseek-chat"
 
 SENTIMENT_LABELS = [
     "Excited", "Happy", "Confused", "Worried", "Sad", "Angry", "Bug/Problem", "Neutral"
@@ -92,13 +97,28 @@ class SimpleContextBot:
 
 
 class DeepSeekBot(SimpleContextBot):
-    def __init__(self, personality="friendly teaching assistant", max_history=20):
+    def __init__(self, personality="friendly teaching assistant", max_history=20, api_profile="group"):
         super().__init__(personality, max_history=max_history)
-        repo_deepseek_key = DEFAULT_DEEPSEEK_API_KEY.strip()
+        profile = (api_profile or "group").strip().lower()
+        if profile == "local":
+            repo_deepseek_key = DEFAULT_DEEPSEEK_API_KEY_LOCAL.strip()
+            default_base_url = DEFAULT_DEEPSEEK_BASE_URL_LOCAL
+            default_model = DEFAULT_DEEPSEEK_MODEL_LOCAL
+            env_key = get_env("DEEPSEEK_API_KEY_LOCAL")
+            env_base_url = get_env("DEEPSEEK_BASE_URL_LOCAL")
+            env_model = get_env("DEEPSEEK_MODEL_LOCAL")
+        else:
+            repo_deepseek_key = DEFAULT_DEEPSEEK_API_KEY_GROUP.strip()
+            default_base_url = DEFAULT_DEEPSEEK_BASE_URL_GROUP
+            default_model = DEFAULT_DEEPSEEK_MODEL_GROUP
+            env_key = get_env("DEEPSEEK_API_KEY_GROUP")
+            env_base_url = get_env("DEEPSEEK_BASE_URL_GROUP")
+            env_model = get_env("DEEPSEEK_MODEL_GROUP")
+
         self.provider = "deepseek"
-        self.api_key = get_env("DEEPSEEK_API_KEY") or repo_deepseek_key
-        self.base_url = get_env("DEEPSEEK_BASE_URL", DEFAULT_DEEPSEEK_BASE_URL)
-        self.model = get_env("DEEPSEEK_MODEL", DEFAULT_DEEPSEEK_MODEL)
+        self.api_key = env_key or get_env("DEEPSEEK_API_KEY") or repo_deepseek_key
+        self.base_url = env_base_url or get_env("DEEPSEEK_BASE_URL") or default_base_url
+        self.model = env_model or get_env("DEEPSEEK_MODEL") or default_model
 
     def chat(self, user_message):
         if not self.api_key:
@@ -184,7 +204,7 @@ class DeepSeekBot(SimpleContextBot):
         try:
             data = self._urllib_chat_completion(body.encode("utf-8"))
         except urllib.error.URLError as exc:
-            if "unknown url type: https" not in str(exc):
+            if "unknown url type: https" not in str(exc) and not _is_ssl_related_error(exc):
                 raise
             data = self._curl_chat_completion(body)
         return data["choices"][0]["message"]["content"].strip()
@@ -199,13 +219,33 @@ class DeepSeekBot(SimpleContextBot):
                 "Content-Type": "application/json; charset=utf-8",
             },
         )
-        with urllib.request.urlopen(request, timeout=20) as response:
-            return json.loads(response.read().decode("utf-8"))
+
+        def _fetch_with_context(ctx):
+            opener = _build_https_opener(ctx)
+            with opener.open(request, timeout=20) as response:
+                return json.loads(response.read().decode("utf-8"))
+
+        try:
+            ctx = _ssl_context_for_outbound_https()
+            return _fetch_with_context(ctx)
+        except Exception as first:
+            if sys.platform == "win32" and certifi and _is_ssl_related_error(first):
+                try:
+                    alt = ssl.create_default_context()
+                    alt.load_verify_locations(cafile=certifi.where())
+                    return _fetch_with_context(alt)
+                except Exception as second:
+                    raise RuntimeError(
+                        f"SSL failed (Windows): first try {type(first).__name__}: {first!s}; "
+                        f"certifi retry {type(second).__name__}: {second!s}"
+                    ) from second
+            raise
 
     def _curl_chat_completion(self, body):
+        curl_bin = "curl.exe" if sys.platform == "win32" else "curl"
         result = subprocess.run(
             [
-                "curl.exe",
+                curl_bin,
                 "--silent",
                 "--show-error",
                 "--fail",
@@ -239,6 +279,64 @@ class DeepSeekBot(SimpleContextBot):
         if isinstance(value, bytes):
             return value.decode("utf-8", errors="replace")
         return value or ""
+
+
+_local_bot_sessions = {}
+
+
+def get_local_bot_session(session_id="default", personality="friendly teaching assistant", max_history=20):
+    """
+    Return a local chatbot session scoped by session_id.
+
+    This session is "local" in scope (isolated per GUI/session), but it uses
+    DeepSeekBot internally so it can call the AI model API.
+    """
+    key = (session_id or "default").strip() or "default"
+    if key not in _local_bot_sessions:
+        _local_bot_sessions[key] = DeepSeekBot(
+            personality=personality,
+            max_history=max_history,
+            api_profile="local",
+        )
+    bot = _local_bot_sessions[key]
+    bot.set_personality(personality)
+    return bot
+
+
+def chat_local_only(user_message, session_id="default", personality="friendly teaching assistant", max_history=20):
+    """
+    Chat with a local-scoped bot session and return the reply string.
+
+    - Uses DeepSeek API when available.
+    - Falls back to local rule-based reply if API is unavailable.
+    """
+    bot = get_local_bot_session(
+        session_id=session_id,
+        personality=personality,
+        max_history=max_history,
+    )
+    reply = bot.chat(user_message)
+    if bot.last_status == "fallback":
+        return f"{reply} (API unavailable, local fallback used.)"
+    return reply
+
+
+def reset_local_bot_session(session_id="default"):
+    """
+    Reset one local-only session. Returns True if a session was removed.
+    """
+    key = (session_id or "default").strip() or "default"
+    return _local_bot_sessions.pop(key, None) is not None
+
+
+def create_chatbot(local_only=False, personality="friendly teaching assistant", max_history=20):
+    """
+    Factory function for chatbot creation.
+
+    local_only controls conversation scope only. Both modes use DeepSeekBot
+    behavior (API first, local fallback) to keep API compatibility.
+    """
+    return DeepSeekBot(personality=personality, max_history=max_history)
 
 
 def classify_sentiment_locally(text):

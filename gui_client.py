@@ -13,7 +13,7 @@ try:
 except ImportError:
     PIL_AVAILABLE = False
 
-from chatbot import analyze_sentiment, analyze_sentiment_textblob
+from chatbot import analyze_sentiment, analyze_sentiment_textblob, chat_local_only
 from protocol import ProtocolError, decode_messages, encode_message
 
 
@@ -171,6 +171,7 @@ class ChatGUI:
         tools2.pack(fill=tk.X, pady=(0, 6))
         tk.Button(tools2, text="Bot Personality", command=self.set_bot_personality).pack(side=tk.LEFT, padx=(0, 4))
         tk.Button(tools2, text="Ask Bot", command=self.ask_group_bot).pack(side=tk.LEFT, padx=4)
+        tk.Button(tools2, text="Local Bot", command=self.ask_local_bot).pack(side=tk.LEFT, padx=4)
         tk.Button(tools2, text="Analyze Sentiment", command=self.analyze_sentiment_dialog).pack(side=tk.LEFT, padx=4)
         tk.Button(tools2, text="Game", command=self.open_game_window).pack(side=tk.LEFT, padx=4)
 
@@ -392,6 +393,37 @@ class ChatGUI:
         self.message_entry.delete("1.0", tk.END)
         self.send_command("/bot join")
         threading.Thread(target=self.send_chat_text, args=(f"@bot {prompt}",), daemon=True).start()
+
+    def ask_local_bot(self):
+        """
+        Chat with local-only bot without server/API calls.
+        """
+        prompt = self.message_entry.get("1.0", tk.END).strip()
+        if not prompt:
+            prompt = simpledialog.askstring("Local Bot", "Message to local chatbot:")
+        if not prompt:
+            return
+        self.message_entry.delete("1.0", tk.END)
+
+        conversation_id = self.current_conversation_id or PUBLIC_ROOM_ID
+        self.add_message(conversation_id, "Me", prompt, "me")
+
+        try:
+            session_id = f"gui:{conversation_id}"
+            reply = chat_local_only(
+                prompt,
+                session_id=session_id,
+                personality="friendly group chat assistant",
+                max_history=20,
+            )
+            self.add_message(conversation_id, "LocalBot", reply, "bot")
+        except Exception as exc:
+            self.add_message(
+                conversation_id,
+                "Client",
+                f"Local bot error: {type(exc).__name__}: {exc}",
+                "system",
+            )
 
     def open_game_window(self):
         if not self.ensure_connected():
